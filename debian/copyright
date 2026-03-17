@@ -1,0 +1,13 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: bluraybackup-ex
+Upstream-Contact: ZNH <35349300+kingsznhone@users.noreply.github.com>
+Source: https://github.com/kingsznhone/bluraybackupEx
+
+Files: *
+Copyright: 2023 Matteo Bini <matteobin@tiepi.it>
+		   2024-2026 kingsznhone <35349300+kingsznhone@users.noreply.github.com>
+License: GPL-3+
+
+License: GPL-3+
+ On Debian systems, the complete text of the GNU General Public License
+ version 3 can be found in "/usr/share/common-licenses/GPL-3".

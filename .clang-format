@@ -1,0 +1,37 @@
+BasedOnStyle: LLVM
+DerivePointerAlignment: false
+PointerAlignment: Right
+
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never         
+IndentCaseLabels: false
+IndentPPDirectives: BeforeHash
+
+
+AlignAfterOpenBracket: Align
+AllowAllArgumentsOnNextLine: true
+ContinuationIndentWidth: 4
+
+SpaceBeforeParens: ControlStatements  
+SpaceAfterCStyleCast: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+BinPackArguments: true
+BinPackParameters: true
+
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: InlineOnly 
+
+SortIncludes: true
+IncludeBlocks: Regroup
+
+MaxEmptyLinesToKeep: 2          
+KeepEmptyLinesAtTheStartOfBlocks: false
+ReflowComments: true     
+
+AlignConsecutiveDeclarations: true  
+AlignConsecutiveAssignments: true    
+AlignConsecutiveMacros: true      

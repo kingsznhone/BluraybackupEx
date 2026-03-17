@@ -1,0 +1,43 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug bluraybackup-ex",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Debug/bluraybackup-ex.exe",
+            "args": [
+                "-h"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "PATH",
+                    "value": "${env:PATH};C:/Users/kings/Documents/GitHub/vcpkg/installed/x64-windows/bin"
+                }
+            ],
+            "console": "integratedTerminal",
+            "preLaunchTask": "CMake: Build Only (Debug)"
+        },
+        {
+            "name": "Debug bluraybackup-ex (ISO 镜像)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Debug/bluraybackup-ex.exe",
+            "args": [
+                "-h"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "PATH",
+                    "value": "${env:PATH};C:/Users/kings/Documents/GitHub/vcpkg/installed/x64-windows/bin"
+                }
+            ],
+            "console": "integratedTerminal",
+            "preLaunchTask": "CMake: Build Only (Debug)"
+        }
+    ]
+}

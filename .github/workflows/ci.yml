@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Windows (MSVC + vcpkg)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get vcpkg baseline commit
+        id: vcpkg_baseline
+        run: |
+          $sha = (git ls-remote https://github.com/microsoft/vcpkg refs/heads/master).Split()[0]
+          echo "vcpkg_commit=$sha" >> $env:GITHUB_OUTPUT
+
+      - name: Set up vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgJsonGlob: vcpkg.json
+          vcpkgGitCommitId: ${{ steps.vcpkg_baseline.outputs.vcpkg_commit }}
+
+      - name: Configure
+        run: cmake --preset windows-x64-ci-release
+
+      - name: Build
+        run: cmake --build --preset windows-x64-ci-release
+
+      - name: Collect Windows artifact
+        shell: pwsh
+        run: ./tools/collect-windows-artifacts.ps1
+
+      - name: Verify Windows artifact
+        shell: pwsh
+        run: Get-ChildItem -Path dist/windows -File | Format-Table -AutoSize
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bluraybackup-ex-windows-x64-zip
+          path: dist/windows/bluraybackup-ex.win_x64.zip
+          if-no-files-found: error
+
+  build-linux:
+    name: Linux (Debian package)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake debhelper dpkg-dev libbluray-dev
+
+      - name: Build Debian package
+        run: sh tools/build-deb.sh
+
+      - name: Verify Debian artifact
+        run: ls -la dist/debian
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bluraybackup-ex-debian-deb
+          path: dist/debian/
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish release assets
+    if: github.event_name == 'release'
+    needs:
+      - build-windows
+      - build-linux
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: bluraybackup-ex-windows-x64-zip
+          path: release-assets/windows
+
+      - name: Download Debian artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: bluraybackup-ex-debian-deb
+          path: release-assets/debian
+
+      - name: Verify release assets
+        run: |
+          find release-assets -maxdepth 2 -type f | sort
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release-assets/windows/*.zip
+            release-assets/debian/*.deb
+          overwrite_files: true
+          token: ${{ secrets.GITHUB_TOKEN }}

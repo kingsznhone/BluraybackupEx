@@ -1,0 +1,31 @@
+bluraybackup-ex (2.1.0-1) unstable; urgency=medium
+
+  * Rename the executable, source package, and binary package to
+    bluraybackup-ex.
+  * Synchronize Debian packaging paths and documentation with the new
+    name.
+
+  * Adopt centralized version tracking via the top-level VERSION file.
+  * Synchronize project metadata and documentation with the current CLI.
+  * Refresh Debian packaging metadata for the GitHub-maintained fork.
+
+ -- ZNH <35349300+kingsznhone@users.noreply.github.com>  Tue, 17 Mar 2026 10:33:58 +0800
+
+bluraybackup (2.0-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/control:
+    - Bump Standards-Version to 4.7.2.
+    - Update Description to reflect change from C99 to ANSI C (C89).
+  * debian/upstream/metadata:
+    - Remove deprecated Name and Contact fields.
+  * debian/watch:
+    - Change URL to FTP.
+
+ -- Matteo Bini <matteobin@tiepi.it>  Tue, 08 Apr 2025 18:29:38 +0200
+
+bluraybackup (1.0-1) unstable; urgency=low
+
+  * Initial release, closes: #1055089.
+
+ -- Matteo Bini <matteobin@tiepi.it>  Mon, 30 Oct 2023 18:46:04 +0100

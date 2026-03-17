@@ -1,0 +1,26 @@
+Source: bluraybackup-ex
+Section: video
+Priority: optional
+Maintainer: ZNH <35349300+kingsznhone@users.noreply.github.com>
+Build-Depends: debhelper-compat (= 13),
+               libbluray-dev
+Standards-Version: 4.7.2
+Vcs-Git: https://github.com/kingsznhone/bluraybackupEx.git
+Vcs-Browser: https://github.com/kingsznhone/bluraybackupEx
+Homepage: https://github.com/kingsznhone/bluraybackupEx
+Rules-Requires-Root: no
+
+Package: bluraybackup-ex
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends}
+Recommends: libaacs0,
+            libbdplus0
+Suggests: libbluray-bdj
+Description: Backup BDMV from the command line
+ bluraybackup-ex makes a decrypted copy of the whole Blu-ray Disc Movie
+ or extracts the main title from a Blu-ray drive, disc image, or BDMV
+ directory.
+ .
+ Inspired by dvdbackup, now maintained as a C17 codebase with modern
+ CMake-based builds.

@@ -1,0 +1,75 @@
+NOTE: This file is kept as a historical upstream reference.
+The current, authoritative documentation for this fork is in README.md.
+This fork now ships as bluraybackup-ex, with the modern CLI using -i/-o/-b options, C17, and full-disc or main-title extraction.
+
+bluraybackup is a command line program to backup Blu-ray Disc Movies
+(BDMV), inspired by dvdbackup [1], developed in ANSI C (C89) following
+the suckless philosophy [2].
+
+It makes a decrypted copy of the whole Blu-ray Disc Movie or it extracts
+a decrypted version of a specific BDMV stream. Since Blu-ray is an
+especially nasty format [3], this software may not work with all discs.
+It both depends on your KEYDB.cfg file and on the BD+ generation
+(version).
+
+bluraybackup relies on libbluray [4] to read disc data and on libaacs
+[5] to remove Advanced Access Content System (AACS) encryption. To build
+it you need libbluray and its headers. To successfully decrypt a Blu-ray
+Disc Movie you both need libaacs installed and a KEYDB.cfg file,
+containing your disc keys.
+
+Moreover, if your disc is plagued by BD+ as well, you need to install
+libbdplus [6]. BD+ is a form of copy obstruction, which consists in
+writing video streams to disc with small errors. These errors get fixed
+during playback by a virtual machine embedded in official players, only
+if the player keys are verified by the same virtual machine. libbdplus
+is an implementation of the BD+ virtual machine features. However it
+doesn't support all the BD+ generations. Since libbdplus 0.2.0, it's
+possible to bypass BD+ emulation, using cached tables to fix the broken
+streams.
+
+In addition to physical disc devices, bluraybackup also accepts ISO/BIN
+disc image files and directories containing an extracted BDMV structure
+as the source argument (-d).
+
+
+USAGE EXAMPLES
+
+  # Copy entire disc to current directory (physical drive)
+  bluraybackup -d /dev/sr0
+
+  # Copy entire disc from an ISO image
+  bluraybackup -d disc.iso
+
+  # Copy entire disc from a BIN image
+  bluraybackup -d disc.bin
+
+  # Extract main title from ISO to a file
+  bluraybackup -d disc.iso -m main_title.m2ts
+
+  # Extract main title from BIN to stdout (pipe to player)
+  bluraybackup -d disc.bin -m | mpv -
+
+  # Extract a specific stream from ISO to stdout
+  bluraybackup -d disc.iso BDMV/STREAM/00001.m2ts
+
+  # Extract a specific stream from ISO to a file
+  bluraybackup -d disc.iso BDMV/STREAM/00001.m2ts output.m2ts
+
+  # Use a custom KEYDB.cfg
+  bluraybackup -d disc.iso -k /path/to/KEYDB.cfg -m main_title.m2ts
+
+  # Use an extracted BDMV directory
+  bluraybackup -d /path/to/bdmv_dir -m main_title.m2ts
+
+
+See also Blu-ray on ArchWiki [7].
+
+
+[1] https://dvdbackup.sourceforge.net/
+[2] http://suckless.org/philosophy/
+[3] https://www.defectivebydesign.org/topic/bluray
+[4] http://www.videolan.org/developers/libbluray.html
+[5] http://www.videolan.org/developers/libaacs.html
+[6] http://www.videolan.org/developers/libbdplus.html
+[7] https://wiki.archlinux.org/title/Blu-ray

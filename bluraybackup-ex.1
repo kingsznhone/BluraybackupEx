@@ -1,0 +1,87 @@
+.TH bluraybackup-ex 1 "March 2026" "bluraybackup-ex"
+.SH NAME
+bluraybackup-ex \- backup Blu-ray Disc Movies using libbluray
+.SH SYNOPSIS
+.B bluraybackup-ex
+{-d \fIdevice\fR | -i \fIinput\fR} [-k \fIkeyfile\fR] [-b \fIsize\fR] [-o \fIoutdir\fR]
+
+.B bluraybackup-ex
+{-d \fIdevice\fR | -i \fIinput\fR} [-k \fIkeyfile\fR] -m [-b \fIsize\fR] [-o \fIoutdir\fR]
+
+.B bluraybackup-ex
+[\fIOPTION\fR]
+.SH DESCRIPTION
+\fBbluraybackup-ex\fP makes a decrypted copy of a Blu-ray Disc Movie
+from a physical drive, an ISO/BIN disc image, or a directory
+containing a BDMV structure.
+
+Without \fB-m\fR, the whole disc structure is copied.
+With \fB-m\fR, only the main title is extracted and written as
+\fBmain_title.m2ts\fR.
+
+To read protected Blu-ray media you need \fBlibaacs\fR installed and a
+valid \fBKEYDB.cfg\fR file. Some discs also require \fBlibbdplus\fR.
+.SH OPTIONS
+.TP
+\fB-d\fR, \fB--device\fR=\fIPATH\fR
+Use a physical Blu-ray device path, such as \fB/dev/sr0\fR on Linux or
+\fBD:\fR on Windows.
+.TP
+\fB-i\fR, \fB--input\fR=\fIPATH\fR
+Use a local ISO/BIN image file or a directory containing a BDMV
+structure.
+.TP
+\fB-k\fR, \fB--keydb\fR=\fIFILE\fR
+Use the specified AACS keys database file.
+If omitted, \fBbluraybackup-ex\fR searches the standard KEYDB locations and
+common filename variants.
+.TP
+\fB-m\fR, \fB--main\fR
+Extract only the main title and save it as \fBmain_title.m2ts\fR.
+.TP
+\fB-o\fR, \fB--output\fR=\fIDIR\fR
+Write output into \fIDIR\fR. The directory is created if necessary.
+.TP
+\fB-b\fR, \fB--buffer\fR=\fISIZE\fR
+Set the I/O buffer size. Accepted suffixes are \fBk\fR, \fBm\fR, and
+\fBg\fR for powers of 1024. The value must be at least 6144 bytes.
+.TP
+\fB-h\fR, \fB--help\fR
+Print usage information.
+.TP
+\fB-v\fR, \fB--version\fR
+Print version and license information.
+.SH BEHAVIOR
+.TP
+Input selection
+\fB-d\fR and \fB-i\fR are mutually exclusive. If neither is provided,
+the default device is used: \fB/dev/sr0\fR on Unix-like systems or
+\fBD:\fR on Windows.
+.TP
+Output directory
+If \fB-o\fR is not specified and \fB-i\fR is used, output defaults to the
+directory containing the input image or BDMV directory. Otherwise output
+is written to the current working directory.
+.SH EXIT STATUS
+.TP
+\fB0\fP
+Backup completed successfully.
+.TP
+\fB1\fP
+An error occurred.
+.SH SEE ALSO
+.P
+\fBdvdbackup\fP(1)
+
+.B https://www.videolan.org/developers/libbluray.html
+
+.B https://www.videolan.org/developers/libaacs.html
+
+.B https://www.videolan.org/developers/libbdplus.html
+
+.B https://wiki.archlinux.org/title/Blu-ray
+.SH AUTHORS
+bluraybackup-ex was written by Matteo Bini <matteobin@tiepi.it>.
+
+Major improvements and ongoing maintenance in this repository are by
+kingsznhone <https://github.com/kingsznhone>.

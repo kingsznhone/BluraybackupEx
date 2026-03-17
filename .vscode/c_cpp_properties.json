@@ -1,0 +1,22 @@
+{
+    "configurations": [
+        {
+            "name": "Windows (MSVC x64)",
+            "includePath": [
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/build/vcpkg_installed/x64-windows/include"
+            ],
+            "defines": [
+                "_WIN32",
+                "_DEBUG",
+                "BIN=\"bluraybackup-ex\"",
+                "VERSION=\"2.1.0\"",
+                "_CRT_SECURE_NO_WARNINGS"
+            ],
+            "compilerPath": "cl.exe",
+            "cStandard": "c17",
+            "intelliSenseMode": "windows-msvc-x64"
+        }
+    ],
+    "version": 4
+}
