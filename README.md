@@ -1,4 +1,4 @@
-# bluraybackup-ex
+# BlueraybackupEx
 
 Blu-ray Disc backup tool that uses libbluray to extract content from Blu-ray discs or disc image files.
 
