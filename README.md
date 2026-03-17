@@ -18,7 +18,7 @@ bluraybackup-ex {-d device | -i input} [-k keyfile] [-b size] -m [-o outdir]
 | `-k FILE` | `--keydb=FILE` | Path to the AACS keys database file |
 | `-m` | `--main` | Extract only the main title and save as `main_title.m2ts` |
 | `-o DIR` | `--output=DIR` | Output directory |
-| `-b SIZE` | `--buffer=SIZE` | I/O read buffer size (e.g. `6144`, `64k`, `1m`, `2g`). Must be ≥ 6144. Default: `6144`. |
+| `-b SIZE` | `--buffer=SIZE` | I/O read buffer size (e.g. `6144`, `60k`, `6m`,). Must be ≥ 6144. Default: `6144`. |
 | `-h` | `--help` | Show help information |
 | `-v` | `--version` | Show version and license information |
 
@@ -58,9 +58,8 @@ Controls how many bytes are read from the source and written to the destination 
 
 - Default: `6144` bytes (one AACS encryption block, 3 × 2048-byte BD sectors). Safe for physical drives with scratched discs — smaller reads mean more precise error recovery.
 - For ISO images or fast SSDs, a larger value significantly improves throughput:
-  - `64k` — moderate boost, still conservative
-  - `6m` — recommended for ISO/SSD backups
-  - `2g` and above — diminishing returns, limited by OS page cache
+  - `60k` — minor boost, still conservative
+  - `6m` — recommended for ISO/SSD backups, optimal for most case.
 - Value must be at least `6144`. Larger sizes do not need to be a multiple of `6144`, though aligned values can still be a sensible choice.
 
 Supported suffixes: `k`/`K` (×1024), `m`/`M` (×1024²), `g`/`G` (×1024³), or plain bytes.
