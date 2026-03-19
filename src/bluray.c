@@ -3,7 +3,9 @@
 #include "async_writer.h"
 #include "progress.h"
 
+#include <inttypes.h>
 #include <libbluray/filesystem.h>
+#include <libbluray/meta_data.h>
 
 
 int file_exists(const char *path, bd_stat_s *info) {
@@ -219,115 +221,404 @@ int copy_file(BLURAY *bluray, const char *src, const char *dst,
     return success;
 }
 
-int copy_main_title(BLURAY *bluray, const char *dst, size_t buf_size) {
-    unsigned char     *bufs[2];
-    FILE              *dst_file;
-    BLURAY_TITLE_INFO *info;
-    int                read = 0, success, title, cur;
-    async_writer_t     writer;
-    int64_t            total_written;
-    uint64_t           start_ms, last_update_ms;
+/* Verify a single file by reading every AACS unit (6144 bytes) and letting
+ * libaacs validate the MAC.  On any read failure the byte offset is reported
+ * and, if possible, reading continues from the next unit.  Returns the number
+ * of unreadable blocks encountered. */
+static int verify_file(BLURAY *bluray, const char *path, size_t buf_size) {
+    uint8_t          *buf;
+    struct bd_file_s *src_file;
+    int64_t           read;
+    int64_t           offset;
+    int64_t           file_size;
+    int               errors;
+    uint64_t          start_ms, last_update_ms;
 
-    success       = 1;
-    total_written = 0;
+    errors    = 0;
+    offset    = 0;
+    file_size = -1;
+    read      = 0;
 
-    bufs[0] = malloc(buf_size);
-    bufs[1] = malloc(buf_size);
-    if (bufs[0] == NULL || bufs[1] == NULL) {
-        fputs(BIN ": Can't allocate read buffer.\n", stderr);
-        free(bufs[0]);
-        free(bufs[1]);
+    buf = malloc(buf_size);
+    if (buf == NULL) {
+        fputs(BIN ": Can't allocate verify buffer.\n", stderr);
         return 0;
     }
 
-    title = bd_get_main_title(bluray);
-    if (title == -1) {
-        fputs(BIN ": Can't get main Blu-ray title.\n", stderr);
-        free(bufs[0]);
-        free(bufs[1]);
-        return 0;
-    }
-    if (bd_select_title(bluray, title) == 0) {
-        fprintf(stderr, BIN ": Can't select Blu-ray title %i.\n", title);
-        free(bufs[0]);
-        free(bufs[1]);
-        return 0;
-    }
-    info = bd_get_title_info(bluray, title, 1);
-    if (info == NULL) {
-        fprintf(stderr, BIN ": Can't get Blu-ray title %i info.\n", title);
-        free(bufs[0]);
-        free(bufs[1]);
-        return 0;
-    }
-    dst_file = dst == NULL ? stdout : bd_fopen(dst, "wb");
-    if (dst_file == NULL) {
-        fprintf(stderr, BIN ": Can't open destination file %s.\n", dst);
-        bd_free_title_info(info);
-        free(bufs[0]);
-        free(bufs[1]);
+    src_file = bd_open_file_dec(bluray, path);
+    if (src_file == NULL) {
+        fprintf(stderr, BIN ": Can't open Blu-ray file %s.\n", path);
+        free(buf);
         return 0;
     }
 
-    if (dst_file != stdout) setvbuf(dst_file, NULL, _IONBF, 0);
-
-    if (aw_init(&writer, dst_file) != 0) {
-        fputs(BIN ": Can't create writer thread.\n", stderr);
-        if (dst_file != stdout) fclose(dst_file);
-        bd_free_title_info(info);
-        free(bufs[0]);
-        free(bufs[1]);
-        return 0;
+    if (src_file->seek != NULL) {
+        file_size = src_file->seek(src_file, 0, SEEK_END);
+        if (file_size <= 0) file_size = -1;
+        src_file->seek(src_file, 0, SEEK_SET);
     }
 
     start_ms = last_update_ms = get_time_ms();
-    print_progress("main title", 0, -1, start_ms, 0);
+    print_progress(path, 0, file_size, start_ms, 0);
 
-    cur = 0;
-    while (running && (read = bd_read(bluray, bufs[cur], (int)buf_size)) &&
-           read > 0) {
-        if (aw_submit(&writer, (uint8_t *)bufs[cur], (size_t)read) != 0) {
-            success = 0;
-            if (dst_file == stdout)
-                fputs(BIN ": Can't write to standard output.\n", stderr);
-            else
-                fprintf(stderr, BIN ": Destination write error on %s.\n", dst);
-            break;
+    while (running) {
+        size_t buf_pos = 0;
+        /* Accumulate as many AACS units as fit in buf_size before processing.
+         * This mirrors copy_file's inner loop and keeps per-read overhead low. */
+        while (running && buf_pos + ENCRYPTED_BYTES_TO_READ <= buf_size) {
+            read = src_file->read(src_file, buf + buf_pos,
+                                  ENCRYPTED_BYTES_TO_READ);
+            if (read <= 0) break;
+            buf_pos += (size_t)read;
         }
-        cur ^= 1;
-        total_written += (int64_t)read;
-        {
+        if (buf_pos > 0) {
+            offset += (int64_t)buf_pos;
             uint64_t now = get_time_ms();
             if (now - last_update_ms >= 1000) {
-                print_progress("main title", total_written, -1, start_ms, 0);
+                print_progress(path, offset, file_size, start_ms, 0);
                 last_update_ms = now;
             }
         }
+        if (read < 0) {
+            fputc('\n', stderr);
+            fprintf(stderr,
+                    BIN ": Read error in %s at byte offset %" PRId64 ".\n",
+                    path, offset);
+            errors++;
+            /* Try to skip to the next AACS unit and continue scanning. */
+            if (src_file->seek == NULL) break;
+            offset = ((offset / ENCRYPTED_BYTES_TO_READ) + 1) *
+                     ENCRYPTED_BYTES_TO_READ;
+            if (src_file->seek(src_file, offset, SEEK_SET) < 0) break;
+            read = 0; /* reset so outer loop continues */
+            continue;
+        }
+        if (read == 0 || !running) break; /* EOF */
     }
-    print_progress("main title", total_written, -1, start_ms, 1);
-    if (aw_finish(&writer) != 0 && success) {
-        success = 0;
-        if (dst_file == stdout)
-            fputs(BIN ": Can't write to standard output.\n", stderr);
-        else
-            fprintf(stderr, BIN ": Destination write error on %s.\n", dst);
-    }
-    if (read < 0) {
-        success = 0;
-        fprintf(stderr, BIN ": Blu-ray read error on title %i.\n", title);
-    }
-    if (!running) success = 0;
 
-    if (dst_file != stdout) fclose(dst_file);
-    free(bufs[0]);
-    free(bufs[1]);
-    bd_free_title_info(info);
+    print_progress(path, offset, file_size, start_ms, 1);
 
-    return success;
+    free(buf);
+    src_file->close(src_file);
+    return errors;
 }
 
-BLURAY *open_bluray(const char *device, const char *keyfile,
-                    const int copy_titles) {
+int verify_dir(BLURAY *bluray, const char *path, size_t buf_size) {
+    int              total_errors;
+    int              read;
+    struct bd_dir_s *dir;
+    BD_DIRENT       *dirent;
+    char            *new_path;
+
+    total_errors = 0;
+    read         = 0;
+
+    dir = bd_open_dir(bluray, path);
+    if (dir == NULL) {
+        fprintf(stderr, BIN ": Can't open Blu-ray dir %s.\n", path);
+        return 0;
+    }
+
+    dirent = malloc(sizeof(BD_DIRENT));
+    if (dirent == NULL) {
+        fputs(BIN ": Can't allocate memory for BD_DIRENT.\n", stderr);
+        dir->close(dir);
+        return 0;
+    }
+
+    do {
+        read = dir->read(dir, dirent);
+        if (read != 0) break;
+
+        new_path =
+            malloc(sizeof(char) * (strlen(path) + strlen(dirent->d_name) + 2));
+        if (new_path == NULL) {
+            fputs(BIN ": Can't allocate memory for new_path.\n", stderr);
+            break;
+        }
+        strcpy(new_path, path);
+#ifdef _WIN32
+        if (strcmp(path, "") != 0) strcat(new_path, "\\");
+#else
+        if (strcmp(path, "") != 0) strcat(new_path, "/");
+#endif
+        strcat(new_path, dirent->d_name);
+
+        if (strchr(dirent->d_name, '.') == NULL)
+            total_errors += verify_dir(bluray, new_path, buf_size);
+        else
+            total_errors += verify_file(bluray, new_path, buf_size);
+
+        free(new_path);
+    } while (running);
+
+    free(dirent);
+    dir->close(dir);
+    return total_errors;
+}
+
+static const char *video_format_str(uint8_t fmt) {
+    switch (fmt) {
+    case 1:
+        return "480i";
+    case 2:
+        return "576i";
+    case 3:
+        return "480p";
+    case 4:
+        return "1080i";
+    case 5:
+        return "720p";
+    case 6:
+        return "1080p";
+    case 7:
+        return "576p";
+    case 8:
+        return "2160p (4K)";
+    default:
+        return "(unknown)";
+    }
+}
+
+static const char *frame_rate_str(uint8_t rate) {
+    switch (rate) {
+    case 1:
+        return "23.976 Hz";
+    case 2:
+        return "24 Hz";
+    case 3:
+        return "25 Hz";
+    case 4:
+        return "29.97 Hz";
+    case 6:
+        return "50 Hz";
+    case 7:
+        return "59.94 Hz";
+    default:
+        return "(unknown)";
+    }
+}
+
+static const char *dynamic_range_str(uint8_t dr) {
+    switch (dr) {
+    case 0:
+        return "SDR";
+    case 1:
+        return "HDR10";
+    case 2:
+        return "Dolby Vision";
+    default:
+        return "(unknown)";
+    }
+}
+
+/* Returns the terminal display width of a UTF-8 string.
+ * East-Asian wide (CJK, fullwidth, etc.) code points count as 2 columns;
+ * everything else counts as 1.  Control/combining characters are ignored. */
+static int utf8_display_width(const char *s) {
+    int width = 0;
+    while (*s) {
+        uint32_t      cp = 0;
+        unsigned char c  = (unsigned char)*s;
+        int           bytes;
+        if (c < 0x80) {
+            cp    = c;
+            bytes = 1;
+        } else if ((c & 0xE0) == 0xC0) {
+            cp    = c & 0x1F;
+            bytes = 2;
+        } else if ((c & 0xF0) == 0xE0) {
+            cp    = c & 0x0F;
+            bytes = 3;
+        } else if ((c & 0xF8) == 0xF0) {
+            cp    = c & 0x07;
+            bytes = 4;
+        } else {
+            s++;
+            continue;
+        }
+        for (int i = 1; i < bytes; i++) {
+            if (((unsigned char)s[i] & 0xC0) != 0x80) {
+                bytes = 1;
+                break;
+            }
+            cp = (cp << 6) | ((unsigned char)s[i] & 0x3F);
+        }
+        s += bytes;
+        /* East-Asian wide ranges (Unicode Standard Annex #11) */
+        if ((cp >= 0x1100 && cp <= 0x115F) || (cp == 0x2329 || cp == 0x232A) ||
+            (cp >= 0x2E80 && cp <= 0x303E) || (cp >= 0x3040 && cp <= 0x33FF) ||
+            (cp >= 0x3400 && cp <= 0x4DBF) || (cp >= 0x4E00 && cp <= 0xA4CF) ||
+            (cp >= 0xA960 && cp <= 0xA97F) || (cp >= 0xAC00 && cp <= 0xD7FF) ||
+            (cp >= 0xF900 && cp <= 0xFAFF) || (cp >= 0xFE10 && cp <= 0xFE1F) ||
+            (cp >= 0xFE30 && cp <= 0xFE4F) || (cp >= 0xFF00 && cp <= 0xFF60) ||
+            (cp >= 0xFFE0 && cp <= 0xFFE6) ||
+            (cp >= 0x1B000 && cp <= 0x1B0FF) ||
+            (cp >= 0x1F300 && cp <= 0x1F64F) ||
+            (cp >= 0x20000 && cp <= 0x2FFFD) ||
+            (cp >= 0x30000 && cp <= 0x3FFFD))
+            width += 2;
+        else if (cp >= 0x20) /* skip control chars */
+            width += 1;
+    }
+    return width;
+}
+
+/* Prints a table row: │ left-24 │ value padded to 48 display cols │ */
+static void print_row_str(const char *label, const char *value) {
+    int dw  = utf8_display_width(value);
+    int pad = 48 - dw;
+    if (pad < 0) pad = 0;
+    fprintf(stderr, "\u2502 %-24s \u2502 %s%*s \u2502\n", label, value, pad,
+            "");
+}
+
+static void print_row_uint(const char *label, unsigned int value) {
+    fprintf(stderr, "\u2502 %-24s \u2502 %-48u \u2502\n", label, value);
+}
+
+static void print_row_int(const char *label, int value) {
+    fprintf(stderr, "\u2502 %-24s \u2502 %-48d \u2502\n", label, value);
+}
+
+#define YN(x) ((x) ? "Yes" : "No")
+
+void log_disc_info(BLURAY *bluray, const BLURAY_DISC_INFO *info) {
+    const struct meta_dl *meta;
+    const char           *disc_name     = NULL;
+    const char           *udf_volume_id = NULL;
+    char                  disc_id_hex[41];
+    int                   i;
+
+    /* Resolve disc name: BD metadata > UDF volume ID > disclib XML */
+    if (info->disc_name != NULL && info->disc_name[0] != '\0')
+        disc_name = info->disc_name;
+    if (info->udf_volume_id != NULL && info->udf_volume_id[0] != '\0')
+        udf_volume_id = info->udf_volume_id;
+    if (disc_name == NULL) {
+        if (udf_volume_id != NULL) {
+            disc_name = udf_volume_id;
+        } else {
+            meta = bd_get_meta(bluray);
+            if (meta != NULL && meta->di_name != NULL &&
+                meta->di_name[0] != '\0')
+                disc_name = meta->di_name;
+        }
+    }
+
+    /* Format disc_id as hex string */
+    for (i = 0; i < 20; i++)
+        sprintf(disc_id_hex + i * 2, "%02X", info->disc_id[i]);
+    disc_id_hex[40] = '\0';
+
+    /* Table layout: │ 24-char-left │ 48-char-right │ = 79 chars total
+     * Row:  │(1) (1)24(1) │(1) (1)48(1) │(1) = 79
+     * Divs: ├──26──┬──50──┤  /  ├──26──┴──50──┤               */
+    fputs("┌───────────────────────────────────────────────────────────────────"
+          "──────────┐\n",
+          stderr);
+    fputs("│                           Blu-ray Disc Information                "
+          "          │\n",
+          stderr);
+    fputs("├──────────────────────────┬────────────────────────────────────────"
+          "──────────┤\n",
+          stderr);
+    print_row_str("Disc Name", disc_name != NULL ? disc_name : "(unknown)");
+    print_row_str("UDF Volume ID",
+                  udf_volume_id != NULL ? udf_volume_id : "(none)");
+    print_row_str("Disc ID", disc_id_hex);
+    print_row_str("BluRay Detected", YN(info->bluray_detected));
+    fputs("├──────────────────────────┴────────────────────────────────────────"
+          "──────────┤\n",
+          stderr);
+    fputs("│  Titles                                                           "
+          "          │\n",
+          stderr);
+    fputs("├──────────────────────────┬────────────────────────────────────────"
+          "──────────┤\n",
+          stderr);
+    print_row_uint("Total Titles", info->num_titles);
+    print_row_uint("HDMV Titles", info->num_hdmv_titles);
+    print_row_uint("BD-J Titles", info->num_bdj_titles);
+    print_row_uint("Unsupported Titles", info->num_unsupported_titles);
+    print_row_str("No Menu Support", YN(info->no_menu_support));
+    print_row_str("First Play Supported", YN(info->first_play_supported));
+    print_row_str("Top Menu Supported", YN(info->top_menu_supported));
+    fputs("├──────────────────────────┴────────────────────────────────────────"
+          "──────────┤\n",
+          stderr);
+    fputs("│  Video                                                            "
+          "          │\n",
+          stderr);
+    fputs("├──────────────────────────┬────────────────────────────────────────"
+          "──────────┤\n",
+          stderr);
+    print_row_str("Video Format", video_format_str(info->video_format));
+    print_row_str("Frame Rate", frame_rate_str(info->frame_rate));
+    print_row_str("3D Content", YN(info->content_exist_3D));
+    print_row_str("Output Mode Preference",
+                  info->initial_output_mode_preference ? "3D" : "2D");
+    print_row_str("Dynamic Range",
+                  dynamic_range_str(info->initial_dynamic_range_type));
+    fputs("├──────────────────────────┴────────────────────────────────────────"
+          "──────────┤\n",
+          stderr);
+    fputs("│  AACS                                                             "
+          "          │\n",
+          stderr);
+    fputs("├──────────────────────────┬────────────────────────────────────────"
+          "──────────┤\n",
+          stderr);
+    print_row_str("AACS Detected", YN(info->aacs_detected));
+    print_row_str("libaacs Available", YN(info->libaacs_detected));
+    print_row_str("AACS Handled", YN(info->aacs_handled));
+    print_row_int("AACS Error Code", info->aacs_error_code);
+    print_row_int("AACS MKB Version", info->aacs_mkbv);
+    fputs("├──────────────────────────┴────────────────────────────────────────"
+          "──────────┤\n",
+          stderr);
+    fputs("│  BD+                                                              "
+          "          │\n",
+          stderr);
+    fputs("├──────────────────────────┬────────────────────────────────────────"
+          "──────────┤\n",
+          stderr);
+    print_row_str("BD+ Detected", YN(info->bdplus_detected));
+    print_row_str("libbdplus Available", YN(info->libbdplus_detected));
+    print_row_str("BD+ Handled", YN(info->bdplus_handled));
+    print_row_uint("BD+ Content Code Gen", info->bdplus_gen);
+    if (info->bdplus_date != 0) {
+        char date_buf[16];
+        sprintf(date_buf, "%04u-%02u-%02u", (info->bdplus_date >> 16) & 0xFFFF,
+                (info->bdplus_date >> 8) & 0xFF, info->bdplus_date & 0xFF);
+        print_row_str("BD+ Code Date", date_buf);
+    } else {
+        print_row_str("BD+ Code Date", "(none)");
+    }
+    fputs("├──────────────────────────┴────────────────────────────────────────"
+          "──────────┤\n",
+          stderr);
+    fputs("│  BD-J (Java)                                                      "
+          "          │\n",
+          stderr);
+    fputs("├──────────────────────────┬────────────────────────────────────────"
+          "──────────┤\n",
+          stderr);
+    print_row_str("BD-J Detected", YN(info->bdj_detected));
+    print_row_str("Java VM Available", YN(info->libjvm_detected));
+    print_row_str("BD-J Handled", YN(info->bdj_handled));
+    print_row_str("BD-J Org ID",
+                  info->bdj_org_id[0] ? info->bdj_org_id : "(none)");
+    print_row_str("BD-J Disc ID",
+                  info->bdj_disc_id[0] ? info->bdj_disc_id : "(none)");
+    fputs("└──────────────────────────┴────────────────────────────────────────"
+          "──────────┘\n",
+          stderr);
+}
+
+#undef YN
+
+BLURAY *open_bluray(const char *device, const char *keyfile) {
     BLURAY                 *bluray;
     const BLURAY_DISC_INFO *info;
 
@@ -344,13 +635,7 @@ BLURAY *open_bluray(const char *device, const char *keyfile,
         return NULL;
     }
 
-    fprintf(stderr,
-            BIN ": Disc info: aacs_detected=%d, libaacs_detected=%d, "
-                "aacs_handled=%d, bdplus_detected=%d, libbdplus_detected=%d, "
-                "bdplus_handled=%d\n",
-            info->aacs_detected, info->libaacs_detected, info->aacs_handled,
-            info->bdplus_detected, info->libbdplus_detected,
-            info->bdplus_handled);
+    log_disc_info(bluray, info);
 
     if (info->aacs_detected == 1 && info->libaacs_detected != 1) {
         fputs(BIN ": To decode an AACS encrypted disc install libaacs.\n",
@@ -376,8 +661,7 @@ BLURAY *open_bluray(const char *device, const char *keyfile,
         return NULL;
     }
 
-    if ((info->aacs_detected == 1 || info->bdplus_detected == 1 ||
-         copy_titles == 1) &&
+    if ((info->aacs_detected == 1 || info->bdplus_detected == 1) &&
         bd_get_titles(bluray, TITLES_RELEVANT, 0) == 0) {
         fputs(BIN ": Can't get Blu-ray titles.\n", stderr);
         bd_close(bluray);
@@ -385,4 +669,61 @@ BLURAY *open_bluray(const char *device, const char *keyfile,
     }
 
     return bluray;
+}
+
+char *get_disc_label(BLURAY *bluray) {
+    const BLURAY_DISC_INFO *info;
+    const struct meta_dl   *meta;
+    const char             *raw = NULL;
+    char                   *label;
+    size_t                  i, len;
+
+    info = bd_get_disc_info(bluray);
+    if (info != NULL) {
+        if (info->udf_volume_id != NULL && info->udf_volume_id[0] != '\0')
+            raw = info->udf_volume_id;
+        else if (info->disc_name != NULL && info->disc_name[0] != '\0')
+            raw = info->disc_name;
+    }
+    if (raw == NULL) {
+        meta = bd_get_meta(bluray);
+        if (meta != NULL && meta->di_name != NULL && meta->di_name[0] != '\0')
+            raw = meta->di_name;
+    }
+
+    /* Fallback: disc_id as hex string */
+    if (raw == NULL) {
+        char hex[41];
+        if (info != NULL) {
+            for (i = 0; i < 20; i++)
+                sprintf(hex + i * 2, "%02X", info->disc_id[i]);
+            hex[40] = '\0';
+        } else {
+            strcpy(hex, "UNKNOWN");
+        }
+        label = malloc(sizeof(hex));
+        if (label == NULL) return NULL;
+        strcpy(label, hex);
+        return label;
+    }
+
+    len   = strlen(raw);
+    label = malloc(len + 1);
+    if (label == NULL) return NULL;
+
+    for (i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)raw[i];
+#ifdef _WIN32
+        /* Windows forbidden filename chars and control chars */
+        if (c < 0x20 || c == '\\' || c == '/' || c == ':' || c == '*' ||
+            c == '?' || c == '"' || c == '<'  || c == '>' || c == '|')
+            label[i] = '_';
+        else
+            label[i] = (char)c;
+#else
+        label[i] = (c == '/' || c == '\0') ? '_' : (char)c;
+#endif
+    }
+    label[len] = '\0';
+    return label;
 }

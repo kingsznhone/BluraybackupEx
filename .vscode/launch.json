@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug bluraybackup-ex",
+            "name": "Debug",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/Debug/bluraybackup-ex.exe",
@@ -21,12 +21,13 @@
             "preLaunchTask": "CMake: Build Only (Debug)"
         },
         {
-            "name": "Debug bluraybackup-ex (ISO 镜像)",
+            "name": "Debug - ISO",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/Debug/bluraybackup-ex.exe",
             "args": [
-                "-h"
+                "-i",
+                "D:\\Workspace\\BD\\Accel World Vs Sword Art Online - Special Contents Blu-ray Disc (Japan) (Disc 1) (PSV Game Bundle).iso"
             ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

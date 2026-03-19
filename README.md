@@ -6,7 +6,6 @@ Blu-ray Disc backup tool that uses libbluray to extract content from Blu-ray dis
 
 ```
 bluraybackup-ex {-d device | -i input} [-k keyfile] [-b size] [-o outdir]
-bluraybackup-ex {-d device | -i input} [-k keyfile] [-b size] -m [-o outdir]
 ```
 
 ## Command-line options
@@ -16,7 +15,6 @@ bluraybackup-ex {-d device | -i input} [-k keyfile] [-b size] -m [-o outdir]
 | `-d PATH` | `--device=PATH` | Physical Blu-ray device path. Example (Linux): `/dev/sr0`; (Windows): `D:` |
 | `-i PATH` | `--input=PATH` | Local disc image file (ISO/BIN) or a directory containing a BDMV structure |
 | `-k FILE` | `--keydb=FILE` | Path to the AACS keys database file |
-| `-m` | `--main` | Extract only the main title and save as `main_title.m2ts` |
 | `-o DIR` | `--output=DIR` | Output directory |
 | `-b SIZE` | `--buffer=SIZE` | I/O read buffer size (e.g. `6144`, `60k`, `6m`,). Must be ≥ 6144. Default: `6144`. |
 | `-h` | `--help` | Show help information |
@@ -43,14 +41,7 @@ It will also try filename variants like `keydb.cfg`, `KeyDB.cfg`, and `KEYDB.CFG
 ### Output directory (`-o`)
 
 - Specify the output directory for backup files. The directory will be created if it does not exist.
-- If `-o` is not specified:
-  - When using `-i`, output is written to the directory containing the image file.
-  - Otherwise, output is written to the current working directory.
-
-### Main-title mode (`-m`)
-
-- Extract only the disc's main-title stream and save it as `main_title.m2ts`.
-- The file is saved to the `-o` directory if specified, or to the default output location.
+- If `-o` is not specified, only disc information is displayed; no files are copied and the program exits with 0.
 
 ### I/O buffer size (`-b`)
 
@@ -67,17 +58,15 @@ Supported suffixes: `k`/`K` (×1024), `m`/`M` (×1024²), `g`/`G` (×1024³), or
 ## Examples
 
 ```bash
-# Backup an entire disc from a physical drive to a specified directory
-bluraybackup-ex -d /dev/sr0 -o ~/backup
-
-# Extract an entire disc from an ISO image (output to the ISO's directory)
+# Print disc information only (no -o given)
+bluraybackup-ex -d /dev/sr0
 bluraybackup-ex -i /path/to/disc.iso
 
-# Extract an entire disc from an ISO into a specific directory
-bluraybackup-ex -i /path/to/disc.iso -o /output/dir
+# Backup an entire disc from a physical drive
+bluraybackup-ex -d /dev/sr0 -o ~/backup
 
-# Extract only the main title from a physical drive
-bluraybackup-ex -d D: -m -o C:\backup
+# Extract an entire disc from an ISO image into a specific directory
+bluraybackup-ex -i /path/to/disc.iso -o /output/dir
 
 # Extract from a BDMV directory and specify a keys file
 bluraybackup-ex -i /path/to/BDMV_DIR -k /path/to/KEYDB.cfg -o ~/output

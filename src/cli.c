@@ -121,7 +121,6 @@ void print_default_usage(void) {
 
 void print_help(void) {
     print_default_usage();
-    print_only_main_title_usage();
     fputs(
         "\n"
         "Options:\n"
@@ -130,35 +129,29 @@ void print_help(void) {
         "  -i, --input=PATH    Local disc image file (ISO/BIN) or BDMV "
         "directory.\n"
         "  -k, --keydb=FILE    Path to the AACS keys database file.\n"
-        "  -m, --main          Copy only the main title (saved as "
-        "main_title.m2ts).\n"
         "  -o, --output=DIR    Output directory for copied files.\n"
         "  -b, --buffer=SIZE   I/O read buffer size (e.g. 6144, 64k, 1m, 2g).\n"
         "                      Must be >= 6144. Default: 6144 (1 AACS block).\n"
         "                      Larger values improve throughput on "
         "images/SSDs.\n"
+        "  -c, --check         Read every file on the disc to verify\n"
+        "                      readability. On AACS-encrypted discs each block\n"
+        "                      MAC is validated; errors are reported with the\n"
+        "                      file path and byte offset. Can be combined with\n"
+        "                      -o to verify before extracting.\n"
         "  -h, --help          Print this help text.\n"
         "  -v, --version       Print version and license information.\n"
         "\n"
         "-d and -i are mutually exclusive; specify one to choose the source.\n"
         "If neither is given, the default device is used (/dev/sr0 or D:).\n"
         "\n"
-        "Without -m, the whole disc structure is copied to the output "
-        "directory.\n"
-        "With -m, only the main title is saved as main_title.m2ts.\n"
+        "The whole disc structure is copied to the output directory.\n"
         "\n"
-        "If -o is not specified:\n"
-        "  - With -i, files are written to the directory containing the input "
-        "file.\n"
-        "  - Otherwise, files are written to the current working directory.\n"
-        "\n" BIN " exits with 0 only after a successful copy,\n"
-        "otherwise it exits with 1.\n",
+        "If -o is not specified, only disc information is displayed\n"
+        "(and disc verification if -c is given).\n"
+        "Program exits with 0 on success, 1 on error.\n"
+        "\n" BIN " exits with 0 on success, 1 on error.\n",
         stdout);
-}
-
-void print_only_main_title_usage(void) {
-    fputs("Usage: " BIN " {-d device | -i input} [-k keyfile] -m [-o outdir]\n",
-          stdout);
 }
 
 void print_version(void) {
@@ -177,8 +170,8 @@ void print_version(void) {
           stdout);
 }
 
-void init(int argc, char **argv, BLURAY **bluray, int *only_main_title,
-          char **output_dir, size_t *buf_size) {
+void init(int argc, char **argv, BLURAY **bluray,
+          char **output_dir, size_t *buf_size, int *check) {
 #ifdef _WIN32
     char abs_source[_MAX_PATH *
                     4]; /* UTF-8 can be up to 4 bytes per code point */
@@ -188,9 +181,9 @@ void init(int argc, char **argv, BLURAY **bluray, int *only_main_title,
     int   free_keyfile = 0;
     char *input_file   = NULL;
     char *keyfile      = NULL;
-    *only_main_title   = 0;
     *output_dir        = NULL;
     *buf_size          = ENCRYPTED_BYTES_TO_READ;
+    *check             = 0;
 
     int i;
     for (i = 1; i < argc; i++) {
@@ -226,6 +219,9 @@ void init(int argc, char **argv, BLURAY **bluray, int *only_main_title,
                         ENCRYPTED_BYTES_TO_READ);
                 goto exit;
             }
+
+        } else if (!strcmp(argv[i], "-c") || !strcmp(argv[i], "--check")) {
+            *check = 1;
 
         } else if (!strcmp(argv[i], "-d") || !strcmp(argv[i], "--device")) {
             if (i == argc - 1) {
@@ -280,9 +276,6 @@ void init(int argc, char **argv, BLURAY **bluray, int *only_main_title,
 
         } else if (!strncmp(argv[i], "--keydb=", 8)) {
             keyfile = argv[i] + 8;
-
-        } else if (!strcmp(argv[i], "-m") || !strcmp(argv[i], "--main")) {
-            *only_main_title = 1;
 
         } else if (!strcmp(argv[i], "-o") || !strcmp(argv[i], "--output")) {
             if (i == argc - 1) {
@@ -357,26 +350,6 @@ void init(int argc, char **argv, BLURAY **bluray, int *only_main_title,
 #endif
     if (!bd_source_exists(source)) goto exit;
 
-    /* If -i used and no -o, derive output_dir from input path's directory */
-    if (input_file != NULL && *output_dir == NULL) {
-        const char *last_sep = strrchr(source, '/');
-#ifdef _WIN32
-        const char *last_bsep = strrchr(source, '\\');
-        if (last_bsep != NULL && (last_sep == NULL || last_bsep > last_sep))
-            last_sep = last_bsep;
-#endif
-        if (last_sep != NULL && last_sep != source) {
-            size_t dir_len = last_sep - source;
-            *output_dir    = malloc(dir_len + 1);
-            if (*output_dir == NULL) {
-                fputs(BIN ": Can't allocate memory.\n", stderr);
-                goto exit;
-            }
-            memcpy(*output_dir, source, dir_len);
-            (*output_dir)[dir_len] = '\0';
-        }
-    }
-
     if (keyfile == NULL) {
         keyfile = search_keyfile();
         if (keyfile == NULL) {
@@ -390,7 +363,7 @@ void init(int argc, char **argv, BLURAY **bluray, int *only_main_title,
         goto exit;
     }
 
-    *bluray = open_bluray(source, keyfile, *only_main_title);
+    *bluray = open_bluray(source, keyfile);
 
 exit:
     if (free_keyfile) free(keyfile);

@@ -18,70 +18,108 @@ static void stop(int sig) {
 int main(int argc, char *argv[]) {
     BLURAY *bluray = NULL;
     char   *output_dir;
-    int     only_main_title, success;
-    size_t  buf_size;
+
+#ifdef _WIN32
+    /* Switch the console to UTF-8 so box-drawing characters and any
+     * non-ASCII disc names are displayed correctly. */
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+#endif
+    int    success;
+    int    check;
+    size_t buf_size;
+    char  *disc_dir = NULL;
 
     if (argc == 1) {
         fputs(BIN " " VERSION " - Blu-ray Disc backup tool\n"
                   "Usage: " BIN
                   " {-d device | -i input} [-k keyfile] [-o outdir]\n"
-                  "       " BIN
-                  " {-d device | -i input} [-k keyfile] -m [-o outdir]\n"
                   "Try '" BIN " --help' for more information.\n",
               stdout);
         return 0;
     }
 
-    init(argc, argv, &bluray, &only_main_title, &output_dir, &buf_size);
+    check = 0;
+    init(argc, argv, &bluray, &output_dir, &buf_size, &check);
     success = 0;
+
+    /* No -o and no -c: disc info was already printed; nothing more to do. */
+    if (output_dir == NULL && !check) {
+        success = 1;
+        goto done;
+    }
 
     signal(SIGINT, stop);
     signal(SIGTERM, stop);
 
-    if (only_main_title) {
-        char  *dest;
-        size_t len;
-
-        if (output_dir != NULL) {
-            if (bd_mkdir(output_dir) == -1 && errno != EEXIST) {
-                fprintf(stderr, BIN ": Can't create output directory %s.\n",
-                        output_dir);
-                goto done;
-            }
-            len  = strlen(output_dir) + 1 + strlen("main_title.m2ts") + 1;
-            dest = malloc(len);
-            if (dest == NULL) {
-                fputs(BIN ": Can't allocate memory.\n", stderr);
-                goto done;
-            }
-            sprintf(dest, "%s/main_title.m2ts", output_dir);
-        } else {
-            dest = malloc(strlen("main_title.m2ts") + 1);
-            if (dest == NULL) {
-                fputs(BIN ": Can't allocate memory.\n", stderr);
-                goto done;
-            }
-            strcpy(dest, "main_title.m2ts");
+    if (check) {
+        int errors;
+        fputs("\n"
+              "┌─────────────────────────────────────────────────────────────────────────────┐\n"
+              "│                            Disc Integrity Check                             │\n"
+              "└─────────────────────────────────────────────────────────────────────────────┘\n",
+              stderr);
+        errors = verify_dir(bluray, "", buf_size);
+        if (errors == 0)
+            fputs("\n" BIN ": Disc check passed. No read errors found.\n", stderr);
+        else
+            fprintf(stderr,
+                    "\n" BIN ": Disc check complete: %d read error(s) found.\n",
+                    errors);
+        if (output_dir == NULL) {
+            success = (errors == 0);
+            goto done;
         }
-        success = copy_main_title(bluray, dest, buf_size);
-        free(dest);
-    } else {
-        if (output_dir != NULL) {
-            if (bd_mkdir(output_dir) == -1 && errno != EEXIST) {
-                fprintf(stderr, BIN ": Can't create output directory %s.\n",
-                        output_dir);
-                goto done;
-            }
-            if (chdir(output_dir) == -1) {
-                fprintf(stderr, BIN ": Can't change to output directory %s.\n",
-                        output_dir);
-                goto done;
-            }
-        }
-        success = copy_dir(bluray, "", buf_size);
+        if (!running) goto done;
     }
 
+    /* Build the actual extraction directory: <output_dir>/<disc_label> */
+    {
+        char  *label = get_disc_label(bluray);
+        size_t len;
+        if (label == NULL) {
+            fputs(BIN ": Can't determine disc label.\n", stderr);
+            goto done;
+        }
+        len      = strlen(output_dir) + 1 + strlen(label) + 1;
+        disc_dir = malloc(len);
+        if (disc_dir == NULL) {
+            fputs(BIN ": Can't allocate path buffer.\n", stderr);
+            free(label);
+            goto done;
+        }
+#ifdef _WIN32
+        snprintf(disc_dir, len, "%s\\%s", output_dir, label);
+#else
+        snprintf(disc_dir, len, "%s/%s", output_dir, label);
+#endif
+        free(label);
+        fprintf(stderr, BIN ": Output directory: %s\n", disc_dir);
+    }
+
+    fputs("\n"
+          "┌─────────────────────────────────────────────────────────────────────────────┐\n"
+          "│                              Extracting Files                               │\n"
+          "└─────────────────────────────────────────────────────────────────────────────┘\n",
+          stderr);
+
+    if (bd_mkdir(output_dir) == -1 && errno != EEXIST) {
+        fprintf(stderr, BIN ": Can't create output directory %s.\n",
+                output_dir);
+        goto done;
+    }
+    if (bd_mkdir(disc_dir) == -1 && errno != EEXIST) {
+        fprintf(stderr, BIN ": Can't create disc directory %s.\n", disc_dir);
+        goto done;
+    }
+    if (chdir(disc_dir) == -1) {
+        fprintf(stderr, BIN ": Can't change to disc directory %s.\n", disc_dir);
+        goto done;
+    }
+    success = copy_dir(bluray, "", buf_size);
+
 done:
+    free(disc_dir);
     bd_close(bluray);
 
     return !success;
