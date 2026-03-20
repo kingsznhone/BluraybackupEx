@@ -682,13 +682,13 @@ static int is_m2ts(const char *name) {
  * dst      – output ISO file opened for random-write ("r+b")
  * buf_size – I/O buffer size (will be rounded down to a multiple of 6144) */
 static int patch_iso_stream(BLURAY *bluray, udfread *udf, FILE *dst, const char *bd_path, size_t buf_size) {
-    UDFFILE          *udf_file  = NULL;
-    struct bd_file_s *bd_file   = NULL;
-    uint8_t          *buf       = NULL;
+    UDFFILE          *udf_file = NULL;
+    struct bd_file_s *bd_file  = NULL;
+    uint8_t          *buf      = NULL;
     int64_t           file_size;
-    int64_t           written   = 0;
-    int64_t           rd        = 0;
-    int               success   = 1;
+    int64_t           written = 0;
+    int64_t           rd      = 0;
+    int               success = 1;
     uint64_t          start_ms, last_update_ms;
     size_t            effective_buf;
     uint32_t          file_block = 0; /* logical 2048-byte block index within the file */
@@ -743,65 +743,38 @@ static int patch_iso_stream(BLURAY *bluray, udfread *udf, FILE *dst, const char 
         }
         if (buf_pos == 0) break;
 
-        /* Write the buffer sector-by-sector, seeking to the correct physical
-         * LBA for each 2048-byte block.  Consecutive blocks that share
-         * contiguous LBAs are written in a single fwrite for efficiency. */
-        size_t offset = 0;
-        while (offset < buf_pos) {
-            uint32_t lba = udfread_file_lba(udf_file, file_block);
+        /* Write the buffer one 2048-byte sector at a time, seeking to each
+         * block's physical LBA.  This correctly handles non-contiguous UDF
+         * extents without any look-ahead optimisation. */
+        for (size_t offset = 0; offset < buf_pos; offset += 2048, file_block++) {
+            size_t   sector = buf_pos - offset >= 2048 ? 2048 : buf_pos - offset;
+            uint32_t lba    = udfread_file_lba(udf_file, file_block);
             if (lba == 0) {
-                fprintf(stderr, BIN ": Can't resolve LBA for block %u in %s.\n",
-                        file_block, bd_path);
+                fprintf(stderr, BIN ": Can't resolve LBA for block %u in %s.\n", file_block, bd_path);
                 success = 0;
                 goto done;
             }
-
-            /* Count how many consecutive blocks share contiguous LBAs. */
-            size_t max = (buf_pos - offset) / 2048;
-            size_t run = 1;
-            while (run < max &&
-                   udfread_file_lba(udf_file, file_block + (uint32_t)run) ==
-                       lba + (uint32_t)run)
-                run++;
-
-            size_t write_bytes = run * 2048;
-
             if (fseeko(dst, (int64_t)lba * 2048, SEEK_SET) != 0) {
                 fprintf(stderr, BIN ": Seek error in output for %s.\n", bd_path);
                 success = 0;
                 goto done;
             }
-            if (fwrite(buf + offset, 1, write_bytes, dst) != write_bytes) {
+            if (fwrite(buf + offset, 1, sector, dst) != sector) {
                 fprintf(stderr, BIN ": Write error patching %s.\n", bd_path);
                 success = 0;
                 goto done;
             }
-
-            offset     += write_bytes;
-            file_block += (uint32_t)run;
-        }
-
-        /* Handle a trailing partial sector at end-of-file (buf_pos not a
-         * multiple of 2048 bytes). */
-        if (buf_pos % 2048 != 0) {
-            size_t   tail = buf_pos - offset;
-            uint32_t lba  = udfread_file_lba(udf_file, file_block);
-            if (lba != 0) {
-                if (fseeko(dst, (int64_t)lba * 2048, SEEK_SET) == 0)
-                    fwrite(buf + offset, 1, tail, dst);
-            }
-            file_block++;
         }
 
         written += (int64_t)buf_pos;
 
-        {
-            uint64_t now = get_time_ms();
-            if (now - last_update_ms >= 1000) {
-                print_progress(bd_path, written, file_size, start_ms, 0);
-                last_update_ms = now;
-            }
+
+        uint64_t now = get_time_ms();
+        if (now - last_update_ms >= 1000) {
+            print_progress(bd_path, written, file_size, start_ms, 0);
+            last_update_ms = now;
         }
+
         if (rd <= 0) break;
     }
 
@@ -872,14 +845,14 @@ static int patch_iso_dir(BLURAY *bluray, udfread *udf, FILE *dst, const char *pa
 }
 
 int dump_iso(BLURAY *bluray, const char *iso_path, const char *output_path, size_t buf_size) {
-    FILE           *src           = NULL;
-    FILE           *dst           = NULL;
-    uint8_t        *bufs[2]       = {NULL, NULL};
-    async_writer_t  p1_writer;
-    int             p1_aw_started = 0;
-    udfread        *udf           = NULL;
-    int64_t         total_size    = 0;
-    int             success       = 0;
+    FILE          *src     = NULL;
+    FILE          *dst     = NULL;
+    uint8_t       *bufs[2] = {NULL, NULL};
+    async_writer_t p1_writer;
+    int            p1_aw_started = 0;
+    udfread       *udf           = NULL;
+    int64_t        total_size    = 0;
+    int            success       = 0;
 
     /* Verify that the source is a regular file (not a device or directory). */
     {
@@ -927,7 +900,7 @@ int dump_iso(BLURAY *bluray, const char *iso_path, const char *output_path, size
     setvbuf(dst, NULL, _IONBF, 0);
 
     {
-        int64_t  written_total  = 0;
+        int64_t  written_total = 0;
         size_t   n;
         int      cur            = 0;
         uint64_t start_ms       = get_time_ms();
