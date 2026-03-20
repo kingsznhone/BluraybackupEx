@@ -40,9 +40,7 @@ static inline wchar_t *path_to_wide(const char *s) {
     int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s, -1, NULL, 0);
     if (n > 0) {
         wchar_t *w = (wchar_t *)malloc((size_t)n * sizeof(wchar_t));
-        if (w &&
-            MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s, -1, w, n) > 0)
-            return w;
+        if (w && MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s, -1, w, n) > 0) return w;
         free(w);
     }
     /* Fall back to the system ANSI code page (e.g. CP936 on Chinese Windows).
@@ -86,8 +84,7 @@ static inline FILE *_w_fopen(const char *path, const char *mode) {
     wchar_t *w = path_to_wide(path);
     if (!w) return NULL;
     wchar_t wmode[8] = {0};
-    for (int i = 0; i < 7 && mode[i]; i++)
-        wmode[i] = (wchar_t)(unsigned char)mode[i];
+    for (int i = 0; i < 7 && mode[i]; i++) wmode[i] = (wchar_t)(unsigned char)mode[i];
     FILE *f = _wfopen(w, wmode);
     free(w);
     return f;

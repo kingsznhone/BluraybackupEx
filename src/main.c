@@ -4,9 +4,7 @@
 
 /* C17 sanity checks */
 _Static_assert(sizeof(size_t) >= 4, "size_t must be at least 32 bits");
-_Static_assert(
-    ENCRYPTED_BYTES_TO_READ % 2048 == 0,
-    "ENCRYPTED_BYTES_TO_READ must be a multiple of one BD sector (2048 bytes)");
+_Static_assert(ENCRYPTED_BYTES_TO_READ % 2048 == 0, "ENCRYPTED_BYTES_TO_READ must be a multiple of one BD sector (2048 bytes)");
 
 volatile sig_atomic_t running = 1;
 
@@ -34,16 +32,14 @@ int main(int argc, char *argv[]) {
 
     if (argc == 1) {
         fputs(BIN " " VERSION " - Blu-ray Disc backup tool\n"
-                  "Usage: " BIN
-                  " {-d device | -i input} [-k keyfile] [-m dir|iso] [output]\n"
+                  "Usage: " BIN " {-d device | -i input} [-k keyfile] [-m dir|iso] [output]\n"
                   "Try '" BIN " --help' for more information.\n",
               stdout);
         return 0;
     }
 
     check = 0;
-    init(argc, argv, &bluray, &output, &mode, &buf_size, &check,
-         &source_path);
+    init(argc, argv, &bluray, &output, &mode, &buf_size, &check, &source_path);
     success = 0;
 
     /* No output path and no -c: disc info was already printed; nothing more
@@ -67,9 +63,7 @@ int main(int argc, char *argv[]) {
         if (errors == 0)
             fputs("\n" BIN ": Disc check passed. No read errors found.\n", stderr);
         else
-            fprintf(stderr,
-                    "\n" BIN ": Disc check complete: %d read error(s) found.\n",
-                    errors);
+            fprintf(stderr, "\n" BIN ": Disc check complete: %d read error(s) found.\n", errors);
         if (output == NULL) {
             success = (errors == 0);
             goto done;
@@ -80,9 +74,7 @@ int main(int argc, char *argv[]) {
     /* --mode iso: produce a single decrypted ISO file. */
     if (mode == MODE_ISO) {
         success = dump_iso(bluray, source_path, output, buf_size);
-        if (success)
-            fprintf(stderr, "\n" BIN ": Decrypted ISO written to %s\n",
-                    output);
+        if (success) fprintf(stderr, "\n" BIN ": Decrypted ISO written to %s\n", output);
         goto done;
     }
 
@@ -117,8 +109,7 @@ int main(int argc, char *argv[]) {
           stderr);
 
     if (bd_mkdir(output) == -1 && errno != EEXIST) {
-        fprintf(stderr, BIN ": Can't create output directory %s.\n",
-                output);
+        fprintf(stderr, BIN ": Can't create output directory %s.\n", output);
         goto done;
     }
     if (bd_mkdir(disc_dir) == -1 && errno != EEXIST) {

@@ -11,8 +11,7 @@ static
 #ifdef _WIN32
     EnterCriticalSection(&w->cs);
     for (;;) {
-        while (!w->pending && !w->quit)
-            SleepConditionVariableCS(&w->cvJob, &w->cs, INFINITE);
+        while (!w->pending && !w->quit) SleepConditionVariableCS(&w->cvJob, &w->cs, INFINITE);
         if (w->quit) break;
         LeaveCriticalSection(&w->cs);
         if (fwrite(w->buf, 1, w->len, w->fp) != w->len) w->error = 1;

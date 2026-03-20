@@ -66,9 +66,7 @@ char *search_keyfile(void) {
         /* Use wide API to correctly handle non-ASCII APPDATA paths. */
         static char home_acp[_MAX_PATH * 2];
         wchar_t    *whome = _wgetenv(L"APPDATA");
-        if (whome != NULL)
-            WideCharToMultiByte(CP_ACP, 0, whome, -1, home_acp,
-                                sizeof(home_acp), NULL, NULL);
+        if (whome != NULL) WideCharToMultiByte(CP_ACP, 0, whome, -1, home_acp, sizeof(home_acp), NULL, NULL);
         home = whome != NULL ? home_acp : NULL;
     }
     strcpy(relpath, "\\aacs\\KEYDB.cfg");
@@ -115,76 +113,72 @@ char *search_keyfile(void) {
 }
 
 void print_default_usage(void) {
-    fputs("Usage: " BIN
-          " {-d device | -i input} [-k keyfile] [-m dir|iso] [output]\n",
-          stdout);
+    fputs("Usage: " BIN " {-d device | -i input} [-k keyfile] [-m dir|iso] [output]\n", stdout);
 }
 
 void print_help(void) {
     print_default_usage();
-    fputs(
-        "\n"
-        "Options:\n"
-        "  -d, --device=PATH   Physical Blu-ray device path (e.g. /dev/sr0, "
-        "D:).\n"
-        "  -i, --input=PATH    Local disc image file (ISO/BIN) or BDMV "
-        "directory.\n"
-        "  -k, --keydb=FILE    Path to the AACS keys database file.\n"
-        "  -m, --mode=MODE     Output mode: dir (default) or iso.\n"
-        "                        dir  – extract the full disc file tree into\n"
-        "                               <output>/<disc-label>/.\n"
-        "                        iso  – write a single decrypted ISO image to\n"
-        "                               <output>. Phase 1 copies every sector\n"
-        "                               raw; Phase 2 overwrites encrypted\n"
-        "                               .m2ts streams with decrypted content.\n"
-        "                               Requires -i <file.iso>.\n"
-        "  output              Destination path (directory for dir mode, file\n"
-        "                      for iso mode). If omitted, only disc information\n"
-        "                      is printed.\n"
-        "  -b, --buffer=SIZE   I/O read buffer size (e.g. 6144, 64k, 1m, 2g).\n"
-        "                      Must be >= 6144. Default: 6144 (1 AACS block).\n"
-        "                      Larger values improve throughput on "
-        "images/SSDs.\n"
-        "  -c, --check         Read every file on the disc to verify\n"
-        "                      readability. On AACS-encrypted discs each block\n"
-        "                      MAC is validated; errors are reported with the\n"
-        "                      file path and byte offset. Can be combined with\n"
-        "                      an output path to verify before extracting.\n"
-        "  -h, --help          Print this help text.\n"
-        "  -v, --version       Print version and license information.\n"
-        "\n"
-        "-d and -i are mutually exclusive; specify one to choose the source.\n"
-        "If neither is given, the default device is used (/dev/sr0 or D:).\n"
-        "\n"
-        "If no output path is given, only disc information is displayed\n"
-        "(and disc verification if -c is given).\n"
-        "Program exits with 0 on success, 1 on error.\n"
-        "\n" BIN " exits with 0 on success, 1 on error.\n",
-        stdout);
-}
-
-void print_version(void) {
-    fputs(BIN
-          " " VERSION "\n"
-          "Copyright (C) 2023 Matteo Bini\n"
-          "Copyright (C) 2024-2026 kingsznhone\n"
-          "License: GPLv3+ <http://www.gnu.org/licenses/gpl.html>.\n"
-          "This is free software: you are free to change and redistribute it.\n"
-          "There is NO WARRANTY, to the extent permitted by law.\n"
+    fputs("\n"
+          "Options:\n"
+          "  -d, --device=PATH   Physical Blu-ray device path (e.g. /dev/sr0, "
+          "D:).\n"
+          "  -i, --input=PATH    Local disc image file (ISO/BIN) or BDMV "
+          "directory.\n"
+          "  -k, --keydb=FILE    Path to the AACS keys database file.\n"
+          "  -m, --mode=MODE     Output mode: dir (default) or iso.\n"
+          "                        dir  – extract the full disc file tree into\n"
+          "                               <output>/<disc-label>/.\n"
+          "                        iso  – write a single decrypted ISO image to\n"
+          "                               <output>. Phase 1 copies every sector\n"
+          "                               raw; Phase 2 overwrites encrypted\n"
+          "                               .m2ts streams with decrypted content.\n"
+          "                               Requires -i <file.iso>.\n"
+          "  output              Destination path (directory for dir mode, file\n"
+          "                      for iso mode). If omitted, only disc "
+          "information\n"
+          "                      is printed.\n"
+          "  -b, --buffer=SIZE   I/O read buffer size (e.g. 6144, 64k, 1m, 2g).\n"
+          "                      Must be >= 6144. Default: 6144 (1 AACS block).\n"
+          "                      Larger values improve throughput on "
+          "images/SSDs.\n"
+          "  -c, --check         Read every file on the disc to verify\n"
+          "                      readability. On AACS-encrypted discs each "
+          "block\n"
+          "                      MAC is validated; errors are reported with the\n"
+          "                      file path and byte offset. Can be combined "
+          "with\n"
+          "                      an output path to verify before extracting.\n"
+          "  -h, --help          Print this help text.\n"
+          "  -v, --version       Print version and license information.\n"
           "\n"
-          "Written by Matteo Bini.\n"
+          "-d and -i are mutually exclusive; specify one to choose the source.\n"
+          "If neither is given, the default device is used (/dev/sr0 or D:).\n"
           "\n"
-          "Major improvements and contributions by kingsznhone "
-          "<https://github.com/kingsznhone>\n",
+          "If no output path is given, only disc information is displayed\n"
+          "(and disc verification if -c is given).\n"
+          "Program exits with 0 on success, 1 on error.\n"
+          "\n" BIN " exits with 0 on success, 1 on error.\n",
           stdout);
 }
 
-void init(int argc, char **argv, BLURAY **bluray,
-          char **output, output_mode_t *mode, size_t *buf_size, int *check,
-          char **source_path) {
+void print_version(void) {
+    fputs(BIN " " VERSION "\n"
+              "Copyright (C) 2023 Matteo Bini\n"
+              "Copyright (C) 2024-2026 kingsznhone\n"
+              "License: GPLv3+ <http://www.gnu.org/licenses/gpl.html>.\n"
+              "This is free software: you are free to change and redistribute it.\n"
+              "There is NO WARRANTY, to the extent permitted by law.\n"
+              "\n"
+              "Written by Matteo Bini.\n"
+              "\n"
+              "Major improvements and contributions by kingsznhone "
+              "<https://github.com/kingsznhone>\n",
+          stdout);
+}
+
+void init(int argc, char **argv, BLURAY **bluray, char **output, output_mode_t *mode, size_t *buf_size, int *check, char **source_path) {
 #ifdef _WIN32
-    char abs_source[_MAX_PATH *
-                    4]; /* UTF-8 can be up to 4 bytes per code point */
+    char abs_source[_MAX_PATH * 4]; /* UTF-8 can be up to 4 bytes per code point */
 #endif
     char *device       = NULL;
     int   device_set   = 0;
@@ -205,30 +199,26 @@ void init(int argc, char **argv, BLURAY **bluray,
 
         } else if (!strcmp(argv[i], "-b") || !strcmp(argv[i], "--buffer")) {
             if (i == argc - 1) {
-                fprintf(stderr, BIN ": After \"%s\" write the buffer size.\n",
-                        argv[i]);
+                fprintf(stderr, BIN ": After \"%s\" write the buffer size.\n", argv[i]);
                 goto exit;
             }
             *buf_size = parse_size(argv[++i]);
             if (*buf_size < ENCRYPTED_BYTES_TO_READ) {
-                fprintf(stderr, BIN ": Invalid buffer size; must be >= %d.\n",
-                        ENCRYPTED_BYTES_TO_READ);
+                fprintf(stderr, BIN ": Invalid buffer size; must be >= %d.\n", ENCRYPTED_BYTES_TO_READ);
                 goto exit;
             }
 
         } else if (!strncmp(argv[i], "-b", 2)) {
             *buf_size = parse_size(argv[i] + 2);
             if (*buf_size < ENCRYPTED_BYTES_TO_READ) {
-                fprintf(stderr, BIN ": Invalid buffer size; must be >= %d.\n",
-                        ENCRYPTED_BYTES_TO_READ);
+                fprintf(stderr, BIN ": Invalid buffer size; must be >= %d.\n", ENCRYPTED_BYTES_TO_READ);
                 goto exit;
             }
 
         } else if (!strncmp(argv[i], "--buffer=", 9)) {
             *buf_size = parse_size(argv[i] + 9);
             if (*buf_size < ENCRYPTED_BYTES_TO_READ) {
-                fprintf(stderr, BIN ": Invalid buffer size; must be >= %d.\n",
-                        ENCRYPTED_BYTES_TO_READ);
+                fprintf(stderr, BIN ": Invalid buffer size; must be >= %d.\n", ENCRYPTED_BYTES_TO_READ);
                 goto exit;
             }
 
@@ -237,9 +227,7 @@ void init(int argc, char **argv, BLURAY **bluray,
 
         } else if (!strcmp(argv[i], "-d") || !strcmp(argv[i], "--device")) {
             if (i == argc - 1) {
-                fprintf(stderr,
-                        BIN ": After \"%s\" write the Blu-ray device path.\n",
-                        argv[i]);
+                fprintf(stderr, BIN ": After \"%s\" write the Blu-ray device path.\n", argv[i]);
                 goto exit;
             }
             device     = argv[++i];
@@ -259,10 +247,7 @@ void init(int argc, char **argv, BLURAY **bluray,
 
         } else if (!strcmp(argv[i], "-i") || !strcmp(argv[i], "--input")) {
             if (i == argc - 1) {
-                fprintf(stderr,
-                        BIN
-                        ": After \"%s\" write the input file/directory path.\n",
-                        argv[i]);
+                fprintf(stderr, BIN ": After \"%s\" write the input file/directory path.\n", argv[i]);
                 goto exit;
             }
             input_file = argv[++i];
@@ -275,10 +260,7 @@ void init(int argc, char **argv, BLURAY **bluray,
 
         } else if (!strcmp(argv[i], "-k") || !strcmp(argv[i], "--keydb")) {
             if (i == argc - 1) {
-                fprintf(stderr,
-                        BIN
-                        ": After \"%s\" write the keys database file path.\n",
-                        argv[i]);
+                fprintf(stderr, BIN ": After \"%s\" write the keys database file path.\n", argv[i]);
                 goto exit;
             }
             keyfile = argv[++i];
@@ -291,9 +273,7 @@ void init(int argc, char **argv, BLURAY **bluray,
 
         } else if (!strcmp(argv[i], "-m") || !strcmp(argv[i], "--mode")) {
             if (i == argc - 1) {
-                fprintf(stderr,
-                        BIN ": After \"%s\" write \"dir\" or \"iso\".\n",
-                        argv[i]);
+                fprintf(stderr, BIN ": After \"%s\" write \"dir\" or \"iso\".\n", argv[i]);
                 goto exit;
             }
             ++i;
@@ -304,7 +284,7 @@ void init(int argc, char **argv, BLURAY **bluray,
             } else {
                 fprintf(stderr,
                         BIN ": Unknown mode \"%s\"; expected \"dir\" or \""
-                        "iso\".\n",
+                            "iso\".\n",
                         argv[i]);
                 goto exit;
             }
@@ -318,7 +298,7 @@ void init(int argc, char **argv, BLURAY **bluray,
             } else {
                 fprintf(stderr,
                         BIN ": Unknown mode \"%s\"; expected \"dir\" or \""
-                        "iso\".\n",
+                            "iso\".\n",
                         val);
                 goto exit;
             }
@@ -332,7 +312,7 @@ void init(int argc, char **argv, BLURAY **bluray,
             } else {
                 fprintf(stderr,
                         BIN ": Unknown mode \"%s\"; expected \"dir\" or \""
-                        "iso\".\n",
+                            "iso\".\n",
                         val);
                 goto exit;
             }
@@ -350,7 +330,7 @@ void init(int argc, char **argv, BLURAY **bluray,
             if (*output != NULL) {
                 fprintf(stderr,
                         BIN ": Unexpected argument \"%s\"; output path is "
-                        "already set to \"%s\".\n",
+                            "already set to \"%s\".\n",
                         argv[i], *output);
                 print_default_usage();
                 goto exit;
@@ -364,7 +344,7 @@ void init(int argc, char **argv, BLURAY **bluray,
         if (*output != NULL) {
             fprintf(stderr,
                     BIN ": Unexpected argument \"%s\"; output path is already "
-                    "set to \"%s\".\n",
+                        "set to \"%s\".\n",
                     argv[i], *output);
             print_default_usage();
             goto exit;
@@ -399,8 +379,7 @@ void init(int argc, char **argv, BLURAY **bluray,
             /* Convert back to the system ANSI code page so that the path
              * can be passed to libbluray's bd_open() which uses ANSI APIs
              * internally on Windows. */
-            WideCharToMultiByte(CP_ACP, 0, _wabs, -1, abs_source,
-                                sizeof(abs_source), NULL, NULL);
+            WideCharToMultiByte(CP_ACP, 0, _wabs, -1, abs_source, sizeof(abs_source), NULL, NULL);
             source = abs_source;
         }
         free(_wsrc);
@@ -426,8 +405,8 @@ void init(int argc, char **argv, BLURAY **bluray,
     /* Return a heap-allocated copy of the resolved source path.
      * Caller is responsible for free()ing it. */
     if (*bluray != NULL && source_path != NULL) {
-        size_t slen    = strlen(source) + 1;
-        *source_path   = malloc(slen);
+        size_t slen  = strlen(source) + 1;
+        *source_path = malloc(slen);
         if (*source_path == NULL)
             fputs(BIN ": Can't copy source path.\n", stderr);
         else

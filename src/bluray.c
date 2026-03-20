@@ -22,14 +22,10 @@ int bd_source_exists(const char *path) {
     exist = 0;
 
     if (file_exists(path, &info)) {
-        if (S_ISBLK(info.st_mode) || S_ISREG(info.st_mode) ||
-            S_ISDIR(info.st_mode))
+        if (S_ISBLK(info.st_mode) || S_ISREG(info.st_mode) || S_ISDIR(info.st_mode))
             exist = 1;
         else
-            fprintf(stderr,
-                    BIN
-                    ": %s isn't a block device, image file, or directory.\n",
-                    path);
+            fprintf(stderr, BIN ": %s isn't a block device, image file, or directory.\n", path);
     }
 
     return exist;
@@ -75,8 +71,7 @@ int copy_dir(BLURAY *bluray, const char *path, size_t buf_size) {
             break;
         }
 
-        new_path =
-            malloc(sizeof(char) * (strlen(path) + strlen(dirent->d_name) + 2));
+        new_path = malloc(sizeof(char) * (strlen(path) + strlen(dirent->d_name) + 2));
         if (new_path == NULL) {
             fputs(BIN ": Can't allocate memory for new_path.\n", stderr);
             all_good = 0;
@@ -107,8 +102,7 @@ int copy_dir(BLURAY *bluray, const char *path, size_t buf_size) {
     return all_good;
 }
 
-int copy_file(BLURAY *bluray, const char *src, const char *dst,
-              size_t buf_size) {
+int copy_file(BLURAY *bluray, const char *src, const char *dst, size_t buf_size) {
     uint8_t          *bufs[2];
     FILE             *dst_file;
     int64_t           read = 0;
@@ -173,8 +167,7 @@ int copy_file(BLURAY *bluray, const char *src, const char *dst,
         /* Fill the buffer one AACS unit (6144 bytes) at a time;
          * bd_open_file_dec() requires each read to be exactly unit-sized. */
         while (running && buf_pos + ENCRYPTED_BYTES_TO_READ <= buf_size) {
-            read = src_file->read(src_file, bufs[cur] + buf_pos,
-                                  ENCRYPTED_BYTES_TO_READ);
+            read = src_file->read(src_file, bufs[cur] + buf_pos, ENCRYPTED_BYTES_TO_READ);
             if (read <= 0) break;
             buf_pos += (size_t)read;
         }
@@ -184,8 +177,7 @@ int copy_file(BLURAY *bluray, const char *src, const char *dst,
                 if (dst_file == stdout)
                     fputs(BIN ": Can't write to standard output.\n", stderr);
                 else
-                    fprintf(stderr, BIN ": Destination write error on %s.\n",
-                            dst);
+                    fprintf(stderr, BIN ": Destination write error on %s.\n", dst);
                 break;
             }
             cur ^= 1;
@@ -265,10 +257,10 @@ static int verify_file(BLURAY *bluray, const char *path, size_t buf_size) {
     while (running) {
         size_t buf_pos = 0;
         /* Accumulate as many AACS units as fit in buf_size before processing.
-         * This mirrors copy_file's inner loop and keeps per-read overhead low. */
+         * This mirrors copy_file's inner loop and keeps per-read overhead low.
+         */
         while (running && buf_pos + ENCRYPTED_BYTES_TO_READ <= buf_size) {
-            read = src_file->read(src_file, buf + buf_pos,
-                                  ENCRYPTED_BYTES_TO_READ);
+            read = src_file->read(src_file, buf + buf_pos, ENCRYPTED_BYTES_TO_READ);
             if (read <= 0) break;
             buf_pos += (size_t)read;
         }
@@ -282,14 +274,11 @@ static int verify_file(BLURAY *bluray, const char *path, size_t buf_size) {
         }
         if (read < 0) {
             fputc('\n', stderr);
-            fprintf(stderr,
-                    BIN ": Read error in %s at byte offset %" PRId64 ".\n",
-                    path, offset);
+            fprintf(stderr, BIN ": Read error in %s at byte offset %" PRId64 ".\n", path, offset);
             errors++;
             /* Try to skip to the next AACS unit and continue scanning. */
             if (src_file->seek == NULL) break;
-            offset = ((offset / ENCRYPTED_BYTES_TO_READ) + 1) *
-                     ENCRYPTED_BYTES_TO_READ;
+            offset = ((offset / ENCRYPTED_BYTES_TO_READ) + 1) * ENCRYPTED_BYTES_TO_READ;
             if (src_file->seek(src_file, offset, SEEK_SET) < 0) break;
             read = 0; /* reset so outer loop continues */
             continue;
@@ -331,8 +320,7 @@ int verify_dir(BLURAY *bluray, const char *path, size_t buf_size) {
         read = dir->read(dir, dirent);
         if (read != 0) break;
 
-        new_path =
-            malloc(sizeof(char) * (strlen(path) + strlen(dirent->d_name) + 2));
+        new_path = malloc(sizeof(char) * (strlen(path) + strlen(dirent->d_name) + 2));
         if (new_path == NULL) {
             fputs(BIN ": Can't allocate memory for new_path.\n", stderr);
             break;
@@ -447,16 +435,10 @@ static int utf8_display_width(const char *s) {
         }
         s += bytes;
         /* East-Asian wide ranges (Unicode Standard Annex #11) */
-        if ((cp >= 0x1100 && cp <= 0x115F) || (cp == 0x2329 || cp == 0x232A) ||
-            (cp >= 0x2E80 && cp <= 0x303E) || (cp >= 0x3040 && cp <= 0x33FF) ||
-            (cp >= 0x3400 && cp <= 0x4DBF) || (cp >= 0x4E00 && cp <= 0xA4CF) ||
-            (cp >= 0xA960 && cp <= 0xA97F) || (cp >= 0xAC00 && cp <= 0xD7FF) ||
-            (cp >= 0xF900 && cp <= 0xFAFF) || (cp >= 0xFE10 && cp <= 0xFE1F) ||
-            (cp >= 0xFE30 && cp <= 0xFE4F) || (cp >= 0xFF00 && cp <= 0xFF60) ||
-            (cp >= 0xFFE0 && cp <= 0xFFE6) ||
-            (cp >= 0x1B000 && cp <= 0x1B0FF) ||
-            (cp >= 0x1F300 && cp <= 0x1F64F) ||
-            (cp >= 0x20000 && cp <= 0x2FFFD) ||
+        if ((cp >= 0x1100 && cp <= 0x115F) || (cp == 0x2329 || cp == 0x232A) || (cp >= 0x2E80 && cp <= 0x303E) || (cp >= 0x3040 && cp <= 0x33FF) ||
+            (cp >= 0x3400 && cp <= 0x4DBF) || (cp >= 0x4E00 && cp <= 0xA4CF) || (cp >= 0xA960 && cp <= 0xA97F) || (cp >= 0xAC00 && cp <= 0xD7FF) ||
+            (cp >= 0xF900 && cp <= 0xFAFF) || (cp >= 0xFE10 && cp <= 0xFE1F) || (cp >= 0xFE30 && cp <= 0xFE4F) || (cp >= 0xFF00 && cp <= 0xFF60) ||
+            (cp >= 0xFFE0 && cp <= 0xFFE6) || (cp >= 0x1B000 && cp <= 0x1B0FF) || (cp >= 0x1F300 && cp <= 0x1F64F) || (cp >= 0x20000 && cp <= 0x2FFFD) ||
             (cp >= 0x30000 && cp <= 0x3FFFD))
             width += 2;
         else if (cp >= 0x20) /* skip control chars */
@@ -470,8 +452,7 @@ static void print_row_str(const char *label, const char *value) {
     int dw  = utf8_display_width(value);
     int pad = 48 - dw;
     if (pad < 0) pad = 0;
-    fprintf(stderr, "\u2502 %-24s \u2502 %s%*s \u2502\n", label, value, pad,
-            "");
+    fprintf(stderr, "\u2502 %-24s \u2502 %s%*s \u2502\n", label, value, pad, "");
 }
 
 static void print_row_uint(const char *label, unsigned int value) {
@@ -492,52 +473,34 @@ void log_disc_info(BLURAY *bluray, const BLURAY_DISC_INFO *info) {
     int                   i;
 
     /* Resolve disc name: BD metadata > UDF volume ID > disclib XML */
-    if (info->disc_name != NULL && info->disc_name[0] != '\0')
-        disc_name = info->disc_name;
-    if (info->udf_volume_id != NULL && info->udf_volume_id[0] != '\0')
-        udf_volume_id = info->udf_volume_id;
+    if (info->disc_name != NULL && info->disc_name[0] != '\0') disc_name = info->disc_name;
+    if (info->udf_volume_id != NULL && info->udf_volume_id[0] != '\0') udf_volume_id = info->udf_volume_id;
     if (disc_name == NULL) {
         if (udf_volume_id != NULL) {
             disc_name = udf_volume_id;
         } else {
             meta = bd_get_meta(bluray);
-            if (meta != NULL && meta->di_name != NULL &&
-                meta->di_name[0] != '\0')
-                disc_name = meta->di_name;
+            if (meta != NULL && meta->di_name != NULL && meta->di_name[0] != '\0') disc_name = meta->di_name;
         }
     }
 
     /* Format disc_id as hex string */
-    for (i = 0; i < 20; i++)
-        sprintf(disc_id_hex + i * 2, "%02X", info->disc_id[i]);
+    for (i = 0; i < 20; i++) sprintf(disc_id_hex + i * 2, "%02X", info->disc_id[i]);
     disc_id_hex[40] = '\0';
 
     /* Table layout: │ 24-char-left │ 48-char-right │ = 79 chars total
      * Row:  │(1) (1)24(1) │(1) (1)48(1) │(1) = 79
      * Divs: ├──26──┬──50──┤  /  ├──26──┴──50──┤               */
-    fputs("┌───────────────────────────────────────────────────────────────────"
-          "──────────┐\n",
-          stderr);
-    fputs("│                           Blu-ray Disc Information                "
-          "          │\n",
-          stderr);
-    fputs("├──────────────────────────┬────────────────────────────────────────"
-          "──────────┤\n",
-          stderr);
+    fputs("┌─────────────────────────────────────────────────────────────────────────────┐\n", stderr);
+    fputs("│                           Blu-ray Disc Information                          │\n", stderr);
+    fputs("├──────────────────────────┬──────────────────────────────────────────────────┤\n", stderr);
     print_row_str("Disc Name", disc_name != NULL ? disc_name : "(unknown)");
-    print_row_str("UDF Volume ID",
-                  udf_volume_id != NULL ? udf_volume_id : "(none)");
+    print_row_str("UDF Volume ID", udf_volume_id != NULL ? udf_volume_id : "(none)");
     print_row_str("Disc ID", disc_id_hex);
     print_row_str("BluRay Detected", YN(info->bluray_detected));
-    fputs("├──────────────────────────┴────────────────────────────────────────"
-          "──────────┤\n",
-          stderr);
-    fputs("│  Titles                                                           "
-          "          │\n",
-          stderr);
-    fputs("├──────────────────────────┬────────────────────────────────────────"
-          "──────────┤\n",
-          stderr);
+    fputs("├──────────────────────────┴──────────────────────────────────────────────────┤\n", stderr);
+    fputs("│  Titles                                                                     │\n", stderr);
+    fputs("├──────────────────────────┬──────────────────────────────────────────────────┤\n", stderr);
     print_row_uint("Total Titles", info->num_titles);
     print_row_uint("HDMV Titles", info->num_hdmv_titles);
     print_row_uint("BD-J Titles", info->num_bdj_titles);
@@ -545,76 +508,45 @@ void log_disc_info(BLURAY *bluray, const BLURAY_DISC_INFO *info) {
     print_row_str("No Menu Support", YN(info->no_menu_support));
     print_row_str("First Play Supported", YN(info->first_play_supported));
     print_row_str("Top Menu Supported", YN(info->top_menu_supported));
-    fputs("├──────────────────────────┴────────────────────────────────────────"
-          "──────────┤\n",
-          stderr);
-    fputs("│  Video                                                            "
-          "          │\n",
-          stderr);
-    fputs("├──────────────────────────┬────────────────────────────────────────"
-          "──────────┤\n",
-          stderr);
+    fputs("├──────────────────────────┴──────────────────────────────────────────────────┤\n", stderr);
+    fputs("│  Video                                                                      │\n", stderr);
+    fputs("├──────────────────────────┬──────────────────────────────────────────────────┤\n", stderr);
     print_row_str("Video Format", video_format_str(info->video_format));
     print_row_str("Frame Rate", frame_rate_str(info->frame_rate));
     print_row_str("3D Content", YN(info->content_exist_3D));
-    print_row_str("Output Mode Preference",
-                  info->initial_output_mode_preference ? "3D" : "2D");
-    print_row_str("Dynamic Range",
-                  dynamic_range_str(info->initial_dynamic_range_type));
-    fputs("├──────────────────────────┴────────────────────────────────────────"
-          "──────────┤\n",
-          stderr);
-    fputs("│  AACS                                                             "
-          "          │\n",
-          stderr);
-    fputs("├──────────────────────────┬────────────────────────────────────────"
-          "──────────┤\n",
-          stderr);
+    print_row_str("Output Mode Preference", info->initial_output_mode_preference ? "3D" : "2D");
+    print_row_str("Dynamic Range", dynamic_range_str(info->initial_dynamic_range_type));
+    fputs("├──────────────────────────┴──────────────────────────────────────────────────┤\n", stderr);
+    fputs("│  AACS                                                                       │\n", stderr);
+    fputs("├──────────────────────────┬──────────────────────────────────────────────────┤\n", stderr);
     print_row_str("AACS Detected", YN(info->aacs_detected));
     print_row_str("libaacs Available", YN(info->libaacs_detected));
     print_row_str("AACS Handled", YN(info->aacs_handled));
     print_row_int("AACS Error Code", info->aacs_error_code);
     print_row_int("AACS MKB Version", info->aacs_mkbv);
-    fputs("├──────────────────────────┴────────────────────────────────────────"
-          "──────────┤\n",
-          stderr);
-    fputs("│  BD+                                                              "
-          "          │\n",
-          stderr);
-    fputs("├──────────────────────────┬────────────────────────────────────────"
-          "──────────┤\n",
-          stderr);
+    fputs("├──────────────────────────┴──────────────────────────────────────────────────┤\n", stderr);
+    fputs("│  BD+                                                                        │\n", stderr);
+    fputs("├──────────────────────────┬──────────────────────────────────────────────────┤\n", stderr);
     print_row_str("BD+ Detected", YN(info->bdplus_detected));
     print_row_str("libbdplus Available", YN(info->libbdplus_detected));
     print_row_str("BD+ Handled", YN(info->bdplus_handled));
     print_row_uint("BD+ Content Code Gen", info->bdplus_gen);
     if (info->bdplus_date != 0) {
         char date_buf[16];
-        sprintf(date_buf, "%04u-%02u-%02u", (info->bdplus_date >> 16) & 0xFFFF,
-                (info->bdplus_date >> 8) & 0xFF, info->bdplus_date & 0xFF);
+        sprintf(date_buf, "%04u-%02u-%02u", (info->bdplus_date >> 16) & 0xFFFF, (info->bdplus_date >> 8) & 0xFF, info->bdplus_date & 0xFF);
         print_row_str("BD+ Code Date", date_buf);
     } else {
         print_row_str("BD+ Code Date", "(none)");
     }
-    fputs("├──────────────────────────┴────────────────────────────────────────"
-          "──────────┤\n",
-          stderr);
-    fputs("│  BD-J (Java)                                                      "
-          "          │\n",
-          stderr);
-    fputs("├──────────────────────────┬────────────────────────────────────────"
-          "──────────┤\n",
-          stderr);
+    fputs("├──────────────────────────┴──────────────────────────────────────────────────┤\n", stderr);
+    fputs("│  BD-J (Java)                                                                │\n", stderr);
+    fputs("├──────────────────────────┬──────────────────────────────────────────────────┤\n", stderr);
     print_row_str("BD-J Detected", YN(info->bdj_detected));
     print_row_str("Java VM Available", YN(info->libjvm_detected));
     print_row_str("BD-J Handled", YN(info->bdj_handled));
-    print_row_str("BD-J Org ID",
-                  info->bdj_org_id[0] ? info->bdj_org_id : "(none)");
-    print_row_str("BD-J Disc ID",
-                  info->bdj_disc_id[0] ? info->bdj_disc_id : "(none)");
-    fputs("└──────────────────────────┴────────────────────────────────────────"
-          "──────────┘\n",
-          stderr);
+    print_row_str("BD-J Org ID", info->bdj_org_id[0] ? info->bdj_org_id : "(none)");
+    print_row_str("BD-J Disc ID", info->bdj_disc_id[0] ? info->bdj_disc_id : "(none)");
+    fputs("└──────────────────────────┴──────────────────────────────────────────────────┘\n", stderr);
 }
 
 #undef YN
@@ -639,8 +571,7 @@ BLURAY *open_bluray(const char *device, const char *keyfile) {
     log_disc_info(bluray, info);
 
     if (info->aacs_detected == 1 && info->libaacs_detected != 1) {
-        fputs(BIN ": To decode an AACS encrypted disc install libaacs.\n",
-              stderr);
+        fputs(BIN ": To decode an AACS encrypted disc install libaacs.\n", stderr);
         bd_close(bluray);
         return NULL;
     }
@@ -651,8 +582,7 @@ BLURAY *open_bluray(const char *device, const char *keyfile) {
     }
 
     if (info->bdplus_detected == 1 && info->libbdplus_detected != 1) {
-        fputs(BIN ": To decode a BD+ encrypted disc install libbdplus.\n",
-              stderr);
+        fputs(BIN ": To decode a BD+ encrypted disc install libbdplus.\n", stderr);
         bd_close(bluray);
         return NULL;
     }
@@ -662,8 +592,7 @@ BLURAY *open_bluray(const char *device, const char *keyfile) {
         return NULL;
     }
 
-    if ((info->aacs_detected == 1 || info->bdplus_detected == 1) &&
-        bd_get_titles(bluray, TITLES_RELEVANT, 0) == 0) {
+    if ((info->aacs_detected == 1 || info->bdplus_detected == 1) && bd_get_titles(bluray, TITLES_RELEVANT, 0) == 0) {
         fputs(BIN ": Can't get Blu-ray titles.\n", stderr);
         bd_close(bluray);
         return NULL;
@@ -688,16 +617,14 @@ char *get_disc_label(BLURAY *bluray) {
     }
     if (raw == NULL) {
         meta = bd_get_meta(bluray);
-        if (meta != NULL && meta->di_name != NULL && meta->di_name[0] != '\0')
-            raw = meta->di_name;
+        if (meta != NULL && meta->di_name != NULL && meta->di_name[0] != '\0') raw = meta->di_name;
     }
 
     /* Fallback: disc_id as hex string */
     if (raw == NULL) {
         char hex[41];
         if (info != NULL) {
-            for (i = 0; i < 20; i++)
-                sprintf(hex + i * 2, "%02X", info->disc_id[i]);
+            for (i = 0; i < 20; i++) sprintf(hex + i * 2, "%02X", info->disc_id[i]);
             hex[40] = '\0';
         } else {
             strcpy(hex, "UNKNOWN");
@@ -716,8 +643,7 @@ char *get_disc_label(BLURAY *bluray) {
         unsigned char c = (unsigned char)raw[i];
 #ifdef _WIN32
         /* Windows forbidden filename chars and control chars */
-        if (c < 0x20 || c == '\\' || c == '/' || c == ':' || c == '*' ||
-            c == '?' || c == '"' || c == '<'  || c == '>' || c == '|')
+        if (c < 0x20 || c == '\\' || c == '/' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' || c == '|')
             label[i] = '_';
         else
             label[i] = (char)c;
@@ -747,11 +673,7 @@ static int is_m2ts(const char *name) {
     size_t len = strlen(name);
     if (len < 5) return 0;
     const char *e = name + len - 5;
-    return (e[0] == '.') &&
-           (e[1] == 'm' || e[1] == 'M') &&
-           (e[2] == '2') &&
-           (e[3] == 't' || e[3] == 'T') &&
-           (e[4] == 's' || e[4] == 'S');
+    return (e[0] == '.') && (e[1] == 'm' || e[1] == 'M') && (e[2] == '2') && (e[3] == 't' || e[3] == 'T') && (e[4] == 's' || e[4] == 'S');
 }
 
 /* Patch one .m2ts file in the output ISO with decrypted content.
@@ -759,16 +681,15 @@ static int is_m2ts(const char *name) {
  * udf      – open udfread handle on the *source* ISO
  * dst      – output ISO file opened for random-write ("r+b")
  * buf_size – I/O buffer size (will be rounded down to a multiple of 6144) */
-static int patch_iso_stream(BLURAY *bluray, udfread *udf, FILE *dst,
-                             const char *bd_path, size_t buf_size) {
+static int patch_iso_stream(BLURAY *bluray, udfread *udf, FILE *dst, const char *bd_path, size_t buf_size) {
     UDFFILE          *udf_file = NULL;
     struct bd_file_s *bd_file  = NULL;
     uint8_t          *buf      = NULL;
     uint32_t          start_lba;
     int64_t           file_size;
-    int64_t           written   = 0;
-    int64_t           rd        = 0;
-    int               success   = 1;
+    int64_t           written = 0;
+    int64_t           rd      = 0;
+    int               success = 1;
     uint64_t          start_ms, last_update_ms;
     size_t            effective_buf;
 
@@ -784,8 +705,7 @@ static int patch_iso_stream(BLURAY *bluray, udfread *udf, FILE *dst,
 
     if (start_lba == 0) {
         /* LBA 0 is the system area; no BD data file lives there. */
-        fprintf(stderr, BIN ": Can't determine sector address for %s.\n",
-                bd_path);
+        fprintf(stderr, BIN ": Can't determine sector address for %s.\n", bd_path);
         return 0;
     }
 
@@ -797,8 +717,7 @@ static int patch_iso_stream(BLURAY *bluray, udfread *udf, FILE *dst,
     }
 
     /* Round buf_size down to a whole number of AACS units (6144 bytes). */
-    effective_buf =
-        (buf_size / ENCRYPTED_BYTES_TO_READ) * ENCRYPTED_BYTES_TO_READ;
+    effective_buf = (buf_size / ENCRYPTED_BYTES_TO_READ) * ENCRYPTED_BYTES_TO_READ;
     if (effective_buf == 0) effective_buf = (size_t)ENCRYPTED_BYTES_TO_READ;
 
     buf = malloc(effective_buf);
@@ -822,8 +741,7 @@ static int patch_iso_stream(BLURAY *bluray, udfread *udf, FILE *dst,
         size_t buf_pos = 0;
         /* Read as many AACS units as fit in the buffer. */
         while (running && buf_pos + ENCRYPTED_BYTES_TO_READ <= effective_buf) {
-            rd = bd_file->read(bd_file, buf + buf_pos,
-                               ENCRYPTED_BYTES_TO_READ);
+            rd = bd_file->read(bd_file, buf + buf_pos, ENCRYPTED_BYTES_TO_READ);
             if (rd <= 0) break;
             buf_pos += (size_t)rd;
         }
@@ -857,8 +775,7 @@ done:
 
 /* Recursively walk the BD virtual filesystem.  For every .m2ts file found,
  * call patch_iso_stream() to overwrite its sectors with decrypted data. */
-static int patch_iso_dir(BLURAY *bluray, udfread *udf, FILE *dst,
-                          const char *path, size_t buf_size) {
+static int patch_iso_dir(BLURAY *bluray, udfread *udf, FILE *dst, const char *path, size_t buf_size) {
     int              all_good = 1;
     int              read     = 0;
     struct bd_dir_s *dir;
@@ -898,12 +815,10 @@ static int patch_iso_dir(BLURAY *bluray, udfread *udf, FILE *dst,
 
         if (strchr(dirent->d_name, '.') == NULL) {
             /* No dot in name → treat as directory. */
-            if (!patch_iso_dir(bluray, udf, dst, new_path, buf_size))
-                all_good = 0;
+            if (!patch_iso_dir(bluray, udf, dst, new_path, buf_size)) all_good = 0;
         } else if (is_m2ts(dirent->d_name)) {
             /* Encrypted video stream: patch with decrypted content. */
-            if (!patch_iso_stream(bluray, udf, dst, new_path, buf_size))
-                all_good = 0;
+            if (!patch_iso_stream(bluray, udf, dst, new_path, buf_size)) all_good = 0;
         }
 
         free(new_path);
@@ -914,22 +829,20 @@ static int patch_iso_dir(BLURAY *bluray, udfread *udf, FILE *dst,
     return all_good && running;
 }
 
-int dump_iso(BLURAY *bluray, const char *iso_path, const char *output_path,
-             size_t buf_size) {
-    FILE             *src        = NULL;
-    FILE             *dst        = NULL;
-    uint8_t          *buf        = NULL;
-    udfread          *udf        = NULL;
-    int64_t           total_size = 0;
-    int               success    = 0;
+int dump_iso(BLURAY *bluray, const char *iso_path, const char *output_path, size_t buf_size) {
+    FILE    *src        = NULL;
+    FILE    *dst        = NULL;
+    uint8_t *buf        = NULL;
+    udfread *udf        = NULL;
+    int64_t  total_size = 0;
+    int      success    = 0;
 
     /* Verify that the source is a regular file (not a device or directory). */
     {
         bd_stat_s info;
         if (!file_exists(iso_path, &info) || !S_ISREG(info.st_mode)) {
-            fputs(BIN
-                  ": --iso requires a regular file as source (-i <file.iso>)."
-                  "\n",
+            fputs(BIN ": --iso requires a regular file as source (-i <file.iso>)."
+                      "\n",
                   stderr);
             return 0;
         }
@@ -967,7 +880,7 @@ int dump_iso(BLURAY *bluray, const char *iso_path, const char *output_path,
     setvbuf(dst, NULL, _IONBF, 0);
 
     {
-        int64_t  written_total  = 0;
+        int64_t  written_total = 0;
         size_t   n;
         uint64_t start_ms       = get_time_ms();
         uint64_t last_update_ms = start_ms;
@@ -985,8 +898,7 @@ int dump_iso(BLURAY *bluray, const char *iso_path, const char *output_path,
             {
                 uint64_t now = get_time_ms();
                 if (now - last_update_ms >= 1000) {
-                    print_progress(output_path, written_total, total_size,
-                                   start_ms, 0);
+                    print_progress(output_path, written_total, total_size, start_ms, 0);
                     last_update_ms = now;
                 }
             }
@@ -1011,8 +923,7 @@ int dump_iso(BLURAY *bluray, const char *iso_path, const char *output_path,
     /* Skip Phase 2 entirely when there is nothing to decrypt. */
     {
         const BLURAY_DISC_INFO *info = bd_get_disc_info(bluray);
-        if (info != NULL && info->aacs_detected == 0 &&
-            info->bdplus_detected == 0) {
+        if (info != NULL && info->aacs_detected == 0 && info->bdplus_detected == 0) {
             fputs(BIN ": Disc is not encrypted; Phase 2 skipped.\n", stderr);
             success = 1;
             goto done;
@@ -1031,8 +942,7 @@ int dump_iso(BLURAY *bluray, const char *iso_path, const char *output_path,
 
     dst = bd_fopen(output_path, "r+b");
     if (dst == NULL) {
-        fprintf(stderr, BIN ": Can't reopen output for update: %s.\n",
-                output_path);
+        fprintf(stderr, BIN ": Can't reopen output for update: %s.\n", output_path);
         goto done;
     }
     setvbuf(dst, NULL, _IONBF, 0);
