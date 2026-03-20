@@ -2,7 +2,7 @@ bluraybackup-ex
 bluraybackup-ex-[1-9].[0-9].tar.gz
 debian/debhelper-build-stamp
 debian/files
-[Kk][Ee][Yy][Dd][Bb].[Cc][Ff][Gg]
+[Kk][Ee][Yy][Dd][Bb]*.[Cc][Ff][Gg]
 *.o
 *.iso
 *.deb

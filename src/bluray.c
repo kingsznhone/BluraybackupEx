@@ -592,7 +592,7 @@ BLURAY *open_bluray(const char *device, const char *keyfile) {
         return NULL;
     }
 
-    if ((info->aacs_detected == 1 || info->bdplus_detected == 1) && bd_get_titles(bluray, TITLES_RELEVANT, 0) == 0) {
+    if ((info->aacs_detected == 1 || info->bdplus_detected == 1) && bd_get_titles(bluray, TITLES_ALL, 0) == 0) {
         fputs(BIN ": Can't get Blu-ray titles.\n", stderr);
         bd_close(bluray);
         return NULL;
@@ -830,12 +830,14 @@ static int patch_iso_dir(BLURAY *bluray, udfread *udf, FILE *dst, const char *pa
 }
 
 int dump_iso(BLURAY *bluray, const char *iso_path, const char *output_path, size_t buf_size) {
-    FILE    *src        = NULL;
-    FILE    *dst        = NULL;
-    uint8_t *buf        = NULL;
-    udfread *udf        = NULL;
-    int64_t  total_size = 0;
-    int      success    = 0;
+    FILE           *src           = NULL;
+    FILE           *dst           = NULL;
+    uint8_t        *bufs[2]       = {NULL, NULL};
+    async_writer_t  p1_writer;
+    int             p1_aw_started = 0;
+    udfread        *udf           = NULL;
+    int64_t         total_size    = 0;
+    int             success       = 0;
 
     /* Verify that the source is a regular file (not a device or directory). */
     {
@@ -848,9 +850,12 @@ int dump_iso(BLURAY *bluray, const char *iso_path, const char *output_path, size
         }
     }
 
-    buf = malloc(buf_size);
-    if (buf == NULL) {
+    bufs[0] = malloc(buf_size);
+    bufs[1] = malloc(buf_size);
+    if (bufs[0] == NULL || bufs[1] == NULL) {
         fputs(BIN ": Can't allocate copy buffer.\n", stderr);
+        free(bufs[0]);
+        free(bufs[1]);
         return 0;
     }
 
@@ -880,20 +885,28 @@ int dump_iso(BLURAY *bluray, const char *iso_path, const char *output_path, size
     setvbuf(dst, NULL, _IONBF, 0);
 
     {
-        int64_t  written_total = 0;
+        int64_t  written_total  = 0;
         size_t   n;
+        int      cur            = 0;
         uint64_t start_ms       = get_time_ms();
         uint64_t last_update_ms = start_ms;
+
+        if (aw_init(&p1_writer, dst) != 0) {
+            fputs(BIN ": Can't create writer thread.\n", stderr);
+            goto done;
+        }
+        p1_aw_started = 1;
 
         print_progress(output_path, 0, total_size, start_ms, 0);
 
         while (running) {
-            n = fread(buf, 1, buf_size, src);
+            n = fread(bufs[cur], 1, buf_size, src);
             if (n == 0) break;
-            if (fwrite(buf, 1, n, dst) != n) {
+            if (aw_submit(&p1_writer, bufs[cur], n) != 0) {
                 fprintf(stderr, BIN ": Write error on %s.\n", output_path);
                 goto done;
             }
+            cur ^= 1;
             written_total += (int64_t)n;
             {
                 uint64_t now = get_time_ms();
@@ -904,6 +917,12 @@ int dump_iso(BLURAY *bluray, const char *iso_path, const char *output_path, size
             }
         }
         print_progress(output_path, written_total, total_size, start_ms, 1);
+        if (aw_finish(&p1_writer) != 0) {
+            p1_aw_started = 0;
+            fprintf(stderr, BIN ": Write error on %s.\n", output_path);
+            goto done;
+        }
+        p1_aw_started = 0;
     }
 
     if (!running) goto done;
@@ -950,7 +969,9 @@ int dump_iso(BLURAY *bluray, const char *iso_path, const char *output_path, size
     success = patch_iso_dir(bluray, udf, dst, "", buf_size);
 
 done:
-    free(buf);
+    if (p1_aw_started) aw_finish(&p1_writer);
+    free(bufs[0]);
+    free(bufs[1]);
     if (src != NULL) fclose(src);
     if (dst != NULL) fclose(dst);
     if (udf != NULL) udfread_close(udf);
