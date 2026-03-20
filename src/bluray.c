@@ -6,6 +6,7 @@
 #include <inttypes.h>
 #include <libbluray/filesystem.h>
 #include <libbluray/meta_data.h>
+#include <udfread/udfread.h>
 
 
 int file_exists(const char *path, bd_stat_s *info) {
@@ -726,4 +727,322 @@ char *get_disc_label(BLURAY *bluray) {
     }
     label[len] = '\0';
     return label;
+}
+
+/* --------------------------------------------------------------------------
+ * ISO dump: sector-level decrypted copy
+ * --------------------------------------------------------------------------
+ *
+ * Phase 1 – raw stream copy of the source file to output_path.
+ * Phase 2 – for every .m2ts file found in the BD virtual filesystem, ask
+ *            libudfread for the file's starting sector (LBA) inside the
+ *            ISO and overwrite those sectors with the AACS-decrypted content
+ *            obtained via bd_open_file_dec().
+ *
+ * Both phases show progress via print_progress().
+ */
+
+/* Returns 1 if the filename ends with ".m2ts" (case-insensitive). */
+static int is_m2ts(const char *name) {
+    size_t len = strlen(name);
+    if (len < 5) return 0;
+    const char *e = name + len - 5;
+    return (e[0] == '.') &&
+           (e[1] == 'm' || e[1] == 'M') &&
+           (e[2] == '2') &&
+           (e[3] == 't' || e[3] == 'T') &&
+           (e[4] == 's' || e[4] == 'S');
+}
+
+/* Patch one .m2ts file in the output ISO with decrypted content.
+ * bd_path  – path as returned by bd_open_dir (backslash on Windows)
+ * udf      – open udfread handle on the *source* ISO
+ * dst      – output ISO file opened for random-write ("r+b")
+ * buf_size – I/O buffer size (will be rounded down to a multiple of 6144) */
+static int patch_iso_stream(BLURAY *bluray, udfread *udf, FILE *dst,
+                             const char *bd_path, size_t buf_size) {
+    UDFFILE          *udf_file = NULL;
+    struct bd_file_s *bd_file  = NULL;
+    uint8_t          *buf      = NULL;
+    uint32_t          start_lba;
+    int64_t           file_size;
+    int64_t           written   = 0;
+    int64_t           rd        = 0;
+    int               success   = 1;
+    uint64_t          start_ms, last_update_ms;
+    size_t            effective_buf;
+
+    /* Open via udfread to retrieve the starting LBA within the ISO. */
+    udf_file = udfread_file_open(udf, bd_path);
+    if (udf_file == NULL) {
+        fprintf(stderr, BIN ": udfread: can't open %s.\n", bd_path);
+        return 0;
+    }
+    start_lba = udfread_file_lba(udf_file, 0);
+    file_size = udfread_file_size(udf_file);
+    udfread_file_close(udf_file);
+
+    if (start_lba == 0) {
+        /* LBA 0 is the system area; no BD data file lives there. */
+        fprintf(stderr, BIN ": Can't determine sector address for %s.\n",
+                bd_path);
+        return 0;
+    }
+
+    /* Open the same file via libbluray for AACS-decrypted reads. */
+    bd_file = bd_open_file_dec(bluray, bd_path);
+    if (bd_file == NULL) {
+        fprintf(stderr, BIN ": Can't open %s for decryption.\n", bd_path);
+        return 0;
+    }
+
+    /* Round buf_size down to a whole number of AACS units (6144 bytes). */
+    effective_buf =
+        (buf_size / ENCRYPTED_BYTES_TO_READ) * ENCRYPTED_BYTES_TO_READ;
+    if (effective_buf == 0) effective_buf = (size_t)ENCRYPTED_BYTES_TO_READ;
+
+    buf = malloc(effective_buf);
+    if (buf == NULL) {
+        fputs(BIN ": Can't allocate patch buffer.\n", stderr);
+        success = 0;
+        goto done;
+    }
+
+    /* Seek the output file to the file's starting sector. */
+    if (fseeko(dst, (int64_t)start_lba * 2048, SEEK_SET) != 0) {
+        fprintf(stderr, BIN ": Seek error in output for %s.\n", bd_path);
+        success = 0;
+        goto done;
+    }
+
+    start_ms = last_update_ms = get_time_ms();
+    print_progress(bd_path, 0, file_size, start_ms, 0);
+
+    while (running) {
+        size_t buf_pos = 0;
+        /* Read as many AACS units as fit in the buffer. */
+        while (running && buf_pos + ENCRYPTED_BYTES_TO_READ <= effective_buf) {
+            rd = bd_file->read(bd_file, buf + buf_pos,
+                               ENCRYPTED_BYTES_TO_READ);
+            if (rd <= 0) break;
+            buf_pos += (size_t)rd;
+        }
+        if (buf_pos == 0) break;
+
+        if (fwrite(buf, 1, buf_pos, dst) != buf_pos) {
+            fprintf(stderr, BIN ": Write error patching %s.\n", bd_path);
+            success = 0;
+            break;
+        }
+        written += (int64_t)buf_pos;
+
+        {
+            uint64_t now = get_time_ms();
+            if (now - last_update_ms >= 1000) {
+                print_progress(bd_path, written, file_size, start_ms, 0);
+                last_update_ms = now;
+            }
+        }
+        if (rd <= 0) break;
+    }
+
+    print_progress(bd_path, written, file_size, start_ms, 1);
+    if (!running) success = 0;
+
+done:
+    free(buf);
+    bd_file->close(bd_file);
+    return success;
+}
+
+/* Recursively walk the BD virtual filesystem.  For every .m2ts file found,
+ * call patch_iso_stream() to overwrite its sectors with decrypted data. */
+static int patch_iso_dir(BLURAY *bluray, udfread *udf, FILE *dst,
+                          const char *path, size_t buf_size) {
+    int              all_good = 1;
+    int              read     = 0;
+    struct bd_dir_s *dir;
+    BD_DIRENT       *dirent;
+    char            *new_path;
+
+    dir = bd_open_dir(bluray, path);
+    if (dir == NULL) {
+        fprintf(stderr, BIN ": Can't open BD dir %s.\n", path);
+        return 0;
+    }
+
+    dirent = malloc(sizeof(BD_DIRENT));
+    if (dirent == NULL) {
+        fputs(BIN ": Can't allocate BD_DIRENT.\n", stderr);
+        dir->close(dir);
+        return 0;
+    }
+
+    do {
+        read = dir->read(dir, dirent);
+        if (read != 0) break;
+
+        new_path = malloc(strlen(path) + strlen(dirent->d_name) + 2);
+        if (new_path == NULL) {
+            fputs(BIN ": Can't allocate path buffer.\n", stderr);
+            all_good = 0;
+            break;
+        }
+        strcpy(new_path, path);
+#ifdef _WIN32
+        if (strcmp(path, "") != 0) strcat(new_path, "\\");
+#else
+        if (strcmp(path, "") != 0) strcat(new_path, "/");
+#endif
+        strcat(new_path, dirent->d_name);
+
+        if (strchr(dirent->d_name, '.') == NULL) {
+            /* No dot in name → treat as directory. */
+            if (!patch_iso_dir(bluray, udf, dst, new_path, buf_size))
+                all_good = 0;
+        } else if (is_m2ts(dirent->d_name)) {
+            /* Encrypted video stream: patch with decrypted content. */
+            if (!patch_iso_stream(bluray, udf, dst, new_path, buf_size))
+                all_good = 0;
+        }
+
+        free(new_path);
+    } while (running);
+
+    free(dirent);
+    dir->close(dir);
+    return all_good && running;
+}
+
+int dump_iso(BLURAY *bluray, const char *iso_path, const char *output_path,
+             size_t buf_size) {
+    FILE             *src        = NULL;
+    FILE             *dst        = NULL;
+    uint8_t          *buf        = NULL;
+    udfread          *udf        = NULL;
+    int64_t           total_size = 0;
+    int               success    = 0;
+
+    /* Verify that the source is a regular file (not a device or directory). */
+    {
+        bd_stat_s info;
+        if (!file_exists(iso_path, &info) || !S_ISREG(info.st_mode)) {
+            fputs(BIN
+                  ": --iso requires a regular file as source (-i <file.iso>)."
+                  "\n",
+                  stderr);
+            return 0;
+        }
+    }
+
+    buf = malloc(buf_size);
+    if (buf == NULL) {
+        fputs(BIN ": Can't allocate copy buffer.\n", stderr);
+        return 0;
+    }
+
+    /* ---- Phase 1: raw stream copy ---- */
+    fputs("\n"
+          "┌─────────────────────────────────────────────────────────────────────────────┐\n"
+          "│                          Phase 1/2 - Raw ISO Copy                           │\n"
+          "└─────────────────────────────────────────────────────────────────────────────┘\n",
+          stderr);
+
+    src = bd_fopen(iso_path, "rb");
+    if (src == NULL) {
+        fprintf(stderr, BIN ": Can't open source %s.\n", iso_path);
+        goto done;
+    }
+    if (fseeko(src, 0, SEEK_END) != 0 || (total_size = ftello(src)) <= 0) {
+        fprintf(stderr, BIN ": Can't determine size of %s.\n", iso_path);
+        goto done;
+    }
+    fseeko(src, 0, SEEK_SET);
+
+    dst = bd_fopen(output_path, "wb");
+    if (dst == NULL) {
+        fprintf(stderr, BIN ": Can't create output file %s.\n", output_path);
+        goto done;
+    }
+    setvbuf(dst, NULL, _IONBF, 0);
+
+    {
+        int64_t  written_total  = 0;
+        size_t   n;
+        uint64_t start_ms       = get_time_ms();
+        uint64_t last_update_ms = start_ms;
+
+        print_progress(output_path, 0, total_size, start_ms, 0);
+
+        while (running) {
+            n = fread(buf, 1, buf_size, src);
+            if (n == 0) break;
+            if (fwrite(buf, 1, n, dst) != n) {
+                fprintf(stderr, BIN ": Write error on %s.\n", output_path);
+                goto done;
+            }
+            written_total += (int64_t)n;
+            {
+                uint64_t now = get_time_ms();
+                if (now - last_update_ms >= 1000) {
+                    print_progress(output_path, written_total, total_size,
+                                   start_ms, 0);
+                    last_update_ms = now;
+                }
+            }
+        }
+        print_progress(output_path, written_total, total_size, start_ms, 1);
+    }
+
+    if (!running) goto done;
+
+    fclose(src);
+    src = NULL;
+    fclose(dst);
+    dst = NULL;
+
+    /* ---- Phase 2: decrypt and overwrite .m2ts streams ---- */
+    fputs("\n"
+          "┌─────────────────────────────────────────────────────────────────────────────┐\n"
+          "│                     Phase 2/2 - Decrypting Streams                          │\n"
+          "└─────────────────────────────────────────────────────────────────────────────┘\n",
+          stderr);
+
+    /* Skip Phase 2 entirely when there is nothing to decrypt. */
+    {
+        const BLURAY_DISC_INFO *info = bd_get_disc_info(bluray);
+        if (info != NULL && info->aacs_detected == 0 &&
+            info->bdplus_detected == 0) {
+            fputs(BIN ": Disc is not encrypted; Phase 2 skipped.\n", stderr);
+            success = 1;
+            goto done;
+        }
+    }
+
+    udf = udfread_init();
+    if (udf == NULL) {
+        fputs(BIN ": Can't initialise udfread.\n", stderr);
+        goto done;
+    }
+    if (udfread_open(udf, iso_path) < 0) {
+        fprintf(stderr, BIN ": udfread can't open %s.\n", iso_path);
+        goto done;
+    }
+
+    dst = bd_fopen(output_path, "r+b");
+    if (dst == NULL) {
+        fprintf(stderr, BIN ": Can't reopen output for update: %s.\n",
+                output_path);
+        goto done;
+    }
+    setvbuf(dst, NULL, _IONBF, 0);
+
+    success = patch_iso_dir(bluray, udf, dst, "", buf_size);
+
+done:
+    free(buf);
+    if (src != NULL) fclose(src);
+    if (dst != NULL) fclose(dst);
+    if (udf != NULL) udfread_close(udf);
+    return success;
 }

@@ -16,8 +16,10 @@ static void stop(int sig) {
 }
 
 int main(int argc, char *argv[]) {
-    BLURAY *bluray = NULL;
-    char   *output_dir;
+    BLURAY       *bluray = NULL;
+    char         *output = NULL;
+    output_mode_t mode;
+    char         *source_path = NULL;
 
 #ifdef _WIN32
     /* Switch the console to UTF-8 so box-drawing characters and any
@@ -33,18 +35,20 @@ int main(int argc, char *argv[]) {
     if (argc == 1) {
         fputs(BIN " " VERSION " - Blu-ray Disc backup tool\n"
                   "Usage: " BIN
-                  " {-d device | -i input} [-k keyfile] [-o outdir]\n"
+                  " {-d device | -i input} [-k keyfile] [-m dir|iso] [output]\n"
                   "Try '" BIN " --help' for more information.\n",
               stdout);
         return 0;
     }
 
     check = 0;
-    init(argc, argv, &bluray, &output_dir, &buf_size, &check);
+    init(argc, argv, &bluray, &output, &mode, &buf_size, &check,
+         &source_path);
     success = 0;
 
-    /* No -o and no -c: disc info was already printed; nothing more to do. */
-    if (output_dir == NULL && !check) {
+    /* No output path and no -c: disc info was already printed; nothing more
+     * to do. */
+    if (output == NULL && !check) {
         success = 1;
         goto done;
     }
@@ -66,14 +70,23 @@ int main(int argc, char *argv[]) {
             fprintf(stderr,
                     "\n" BIN ": Disc check complete: %d read error(s) found.\n",
                     errors);
-        if (output_dir == NULL) {
+        if (output == NULL) {
             success = (errors == 0);
             goto done;
         }
         if (!running) goto done;
     }
 
-    /* Build the actual extraction directory: <output_dir>/<disc_label> */
+    /* --mode iso: produce a single decrypted ISO file. */
+    if (mode == MODE_ISO) {
+        success = dump_iso(bluray, source_path, output, buf_size);
+        if (success)
+            fprintf(stderr, "\n" BIN ": Decrypted ISO written to %s\n",
+                    output);
+        goto done;
+    }
+
+    /* Build the actual extraction directory: <output>/<disc_label> */
     {
         char  *label = get_disc_label(bluray);
         size_t len;
@@ -81,7 +94,7 @@ int main(int argc, char *argv[]) {
             fputs(BIN ": Can't determine disc label.\n", stderr);
             goto done;
         }
-        len      = strlen(output_dir) + 1 + strlen(label) + 1;
+        len      = strlen(output) + 1 + strlen(label) + 1;
         disc_dir = malloc(len);
         if (disc_dir == NULL) {
             fputs(BIN ": Can't allocate path buffer.\n", stderr);
@@ -89,9 +102,9 @@ int main(int argc, char *argv[]) {
             goto done;
         }
 #ifdef _WIN32
-        snprintf(disc_dir, len, "%s\\%s", output_dir, label);
+        snprintf(disc_dir, len, "%s\\%s", output, label);
 #else
-        snprintf(disc_dir, len, "%s/%s", output_dir, label);
+        snprintf(disc_dir, len, "%s/%s", output, label);
 #endif
         free(label);
         fprintf(stderr, BIN ": Output directory: %s\n", disc_dir);
@@ -103,9 +116,9 @@ int main(int argc, char *argv[]) {
           "└─────────────────────────────────────────────────────────────────────────────┘\n",
           stderr);
 
-    if (bd_mkdir(output_dir) == -1 && errno != EEXIST) {
+    if (bd_mkdir(output) == -1 && errno != EEXIST) {
         fprintf(stderr, BIN ": Can't create output directory %s.\n",
-                output_dir);
+                output);
         goto done;
     }
     if (bd_mkdir(disc_dir) == -1 && errno != EEXIST) {
@@ -119,6 +132,7 @@ int main(int argc, char *argv[]) {
     success = copy_dir(bluray, "", buf_size);
 
 done:
+    free(source_path);
     free(disc_dir);
     bd_close(bluray);
 

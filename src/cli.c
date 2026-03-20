@@ -115,7 +115,8 @@ char *search_keyfile(void) {
 }
 
 void print_default_usage(void) {
-    fputs("Usage: " BIN " {-d device | -i input} [-k keyfile] [-o outdir]\n",
+    fputs("Usage: " BIN
+          " {-d device | -i input} [-k keyfile] [-m dir|iso] [output]\n",
           stdout);
 }
 
@@ -129,7 +130,17 @@ void print_help(void) {
         "  -i, --input=PATH    Local disc image file (ISO/BIN) or BDMV "
         "directory.\n"
         "  -k, --keydb=FILE    Path to the AACS keys database file.\n"
-        "  -o, --output=DIR    Output directory for copied files.\n"
+        "  -m, --mode=MODE     Output mode: dir (default) or iso.\n"
+        "                        dir  – extract the full disc file tree into\n"
+        "                               <output>/<disc-label>/.\n"
+        "                        iso  – write a single decrypted ISO image to\n"
+        "                               <output>. Phase 1 copies every sector\n"
+        "                               raw; Phase 2 overwrites encrypted\n"
+        "                               .m2ts streams with decrypted content.\n"
+        "                               Requires -i <file.iso>.\n"
+        "  output              Destination path (directory for dir mode, file\n"
+        "                      for iso mode). If omitted, only disc information\n"
+        "                      is printed.\n"
         "  -b, --buffer=SIZE   I/O read buffer size (e.g. 6144, 64k, 1m, 2g).\n"
         "                      Must be >= 6144. Default: 6144 (1 AACS block).\n"
         "                      Larger values improve throughput on "
@@ -138,16 +149,14 @@ void print_help(void) {
         "                      readability. On AACS-encrypted discs each block\n"
         "                      MAC is validated; errors are reported with the\n"
         "                      file path and byte offset. Can be combined with\n"
-        "                      -o to verify before extracting.\n"
+        "                      an output path to verify before extracting.\n"
         "  -h, --help          Print this help text.\n"
         "  -v, --version       Print version and license information.\n"
         "\n"
         "-d and -i are mutually exclusive; specify one to choose the source.\n"
         "If neither is given, the default device is used (/dev/sr0 or D:).\n"
         "\n"
-        "The whole disc structure is copied to the output directory.\n"
-        "\n"
-        "If -o is not specified, only disc information is displayed\n"
+        "If no output path is given, only disc information is displayed\n"
         "(and disc verification if -c is given).\n"
         "Program exits with 0 on success, 1 on error.\n"
         "\n" BIN " exits with 0 on success, 1 on error.\n",
@@ -171,7 +180,8 @@ void print_version(void) {
 }
 
 void init(int argc, char **argv, BLURAY **bluray,
-          char **output_dir, size_t *buf_size, int *check) {
+          char **output, output_mode_t *mode, size_t *buf_size, int *check,
+          char **source_path) {
 #ifdef _WIN32
     char abs_source[_MAX_PATH *
                     4]; /* UTF-8 can be up to 4 bytes per code point */
@@ -181,9 +191,11 @@ void init(int argc, char **argv, BLURAY **bluray,
     int   free_keyfile = 0;
     char *input_file   = NULL;
     char *keyfile      = NULL;
-    *output_dir        = NULL;
+    *output            = NULL;
+    *mode              = MODE_DIR;
     *buf_size          = ENCRYPTED_BYTES_TO_READ;
     *check             = 0;
+    if (source_path) *source_path = NULL;
 
     int i;
     for (i = 1; i < argc; i++) {
@@ -277,20 +289,53 @@ void init(int argc, char **argv, BLURAY **bluray,
         } else if (!strncmp(argv[i], "--keydb=", 8)) {
             keyfile = argv[i] + 8;
 
-        } else if (!strcmp(argv[i], "-o") || !strcmp(argv[i], "--output")) {
+        } else if (!strcmp(argv[i], "-m") || !strcmp(argv[i], "--mode")) {
             if (i == argc - 1) {
                 fprintf(stderr,
-                        BIN ": After \"%s\" write the output directory path.\n",
+                        BIN ": After \"%s\" write \"dir\" or \"iso\".\n",
                         argv[i]);
                 goto exit;
             }
-            *output_dir = argv[++i];
+            ++i;
+            if (!strcmp(argv[i], "dir")) {
+                *mode = MODE_DIR;
+            } else if (!strcmp(argv[i], "iso")) {
+                *mode = MODE_ISO;
+            } else {
+                fprintf(stderr,
+                        BIN ": Unknown mode \"%s\"; expected \"dir\" or \""
+                        "iso\".\n",
+                        argv[i]);
+                goto exit;
+            }
 
-        } else if (!strncmp(argv[i], "-o", 2)) {
-            *output_dir = argv[i] + 2;
+        } else if (!strncmp(argv[i], "-m", 2)) {
+            const char *val = argv[i] + 2;
+            if (!strcmp(val, "dir")) {
+                *mode = MODE_DIR;
+            } else if (!strcmp(val, "iso")) {
+                *mode = MODE_ISO;
+            } else {
+                fprintf(stderr,
+                        BIN ": Unknown mode \"%s\"; expected \"dir\" or \""
+                        "iso\".\n",
+                        val);
+                goto exit;
+            }
 
-        } else if (!strncmp(argv[i], "--output=", 9)) {
-            *output_dir = argv[i] + 9;
+        } else if (!strncmp(argv[i], "--mode=", 7)) {
+            const char *val = argv[i] + 7;
+            if (!strcmp(val, "dir")) {
+                *mode = MODE_DIR;
+            } else if (!strcmp(val, "iso")) {
+                *mode = MODE_ISO;
+            } else {
+                fprintf(stderr,
+                        BIN ": Unknown mode \"%s\"; expected \"dir\" or \""
+                        "iso\".\n",
+                        val);
+                goto exit;
+            }
 
         } else if (!strcmp(argv[i], "-v") || !strcmp(argv[i], "--version")) {
             print_version();
@@ -301,17 +346,30 @@ void init(int argc, char **argv, BLURAY **bluray,
             goto exit;
 
         } else {
-            fprintf(stderr, BIN ": Unexpected argument \"%s\".\n", argv[i]);
-            print_default_usage();
-            goto exit;
+            /* First non-flag argument is the output path. */
+            if (*output != NULL) {
+                fprintf(stderr,
+                        BIN ": Unexpected argument \"%s\"; output path is "
+                        "already set to \"%s\".\n",
+                        argv[i], *output);
+                print_default_usage();
+                goto exit;
+            }
+            *output = argv[i];
         }
     }
 
-    /* Reject trailing positional arguments */
-    if (i < argc) {
-        fprintf(stderr, BIN ": Unexpected argument \"%s\".\n", argv[i]);
-        print_default_usage();
-        goto exit;
+    /* Accept at most one positional argument after "--". */
+    for (; i < argc; i++) {
+        if (*output != NULL) {
+            fprintf(stderr,
+                    BIN ": Unexpected argument \"%s\"; output path is already "
+                    "set to \"%s\".\n",
+                    argv[i], *output);
+            print_default_usage();
+            goto exit;
+        }
+        *output = argv[i];
     }
 
     /* -d and -i are mutually exclusive */
@@ -364,6 +422,17 @@ void init(int argc, char **argv, BLURAY **bluray,
     }
 
     *bluray = open_bluray(source, keyfile);
+
+    /* Return a heap-allocated copy of the resolved source path.
+     * Caller is responsible for free()ing it. */
+    if (*bluray != NULL && source_path != NULL) {
+        size_t slen    = strlen(source) + 1;
+        *source_path   = malloc(slen);
+        if (*source_path == NULL)
+            fputs(BIN ": Can't copy source path.\n", stderr);
+        else
+            memcpy(*source_path, source, slen);
+    }
 
 exit:
     if (free_keyfile) free(keyfile);

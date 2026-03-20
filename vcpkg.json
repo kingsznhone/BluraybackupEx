@@ -1,8 +1,8 @@
 {
-    "name": "bluraybackup-ex",
-    "version": "2.1.0",
-    "description": "Blu-ray Disc backup tool using libbluray",
-    "dependencies": [
-        "libbluray"
-    ]
+  "name": "bluraybackup-ex",
+  "version": "2.2.0",
+  "description": "Blu-ray Disc backup tool using libbluray",
+  "dependencies": [
+    "libbluray"
+  ]
 }

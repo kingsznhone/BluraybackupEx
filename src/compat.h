@@ -98,6 +98,10 @@ static inline FILE *_w_fopen(const char *path, const char *mode) {
     #define bd_stat(p, s)  _w_stat(p, s)
     #define bd_fopen(p, m) _w_fopen(p, m)
 
+    /* MSVC does not provide fseeko/ftello; map them to the 64-bit variants. */
+    #define fseeko(f, o, w) _fseeki64((f), (o), (w))
+    #define ftello(f)       _ftelli64(f)
+
 #else
     #include <pthread.h>
     #include <unistd.h>

@@ -17,10 +17,10 @@ Depends: ${shlibs:Depends},
 Recommends: libaacs0,
             libbdplus0
 Suggests: libbluray-bdj
-Description: Backup BDMV from the command line
- bluraybackup-ex makes a decrypted copy of the whole Blu-ray Disc Movie
- or extracts the main title from a Blu-ray drive, disc image, or BDMV
- directory.
+Description: Backup Blu-ray Disc content from the command line
+ bluraybackup-ex makes a decrypted copy of a Blu-ray disc using libbluray.
+ It supports two output modes selected with -m: "dir" (default) extracts the
+ full disc file tree; "iso" produces a single decrypted ISO image.
+ Sources can be a physical drive, an ISO/BIN disc image, or a BDMV directory.
  .
- Inspired by dvdbackup, now maintained as a C17 codebase with modern
- CMake-based builds.
+ Inspired by dvdbackup, maintained as a C17 codebase with modern CMake builds.

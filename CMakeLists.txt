@@ -35,9 +35,15 @@ else()
         NAMES bluray
         REQUIRED
     )
+    find_library(LIBUDFREAD_LIBRARY
+        NAMES udfread
+    )
     add_library(_libbluray_manual INTERFACE)
     target_include_directories(_libbluray_manual INTERFACE ${LIBBLURAY_INCLUDE_DIR})
-    target_link_libraries(_libbluray_manual INTERFACE ${LIBBLURAY_LIBRARY})
+    target_link_libraries(_libbluray_manual INTERFACE
+        ${LIBBLURAY_LIBRARY}
+        $<$<BOOL:${LIBUDFREAD_LIBRARY}>:${LIBUDFREAD_LIBRARY}>
+    )
     set(_LIBBLURAY_TARGET _libbluray_manual)
 endif()
 

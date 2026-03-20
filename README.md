@@ -5,7 +5,7 @@ Blu-ray Disc backup tool that uses libbluray to extract content from Blu-ray dis
 ## Usage
 
 ```
-bluraybackup-ex {-d device | -i input} [-k keyfile] [-b size] [-o outdir]
+bluraybackup-ex {-d device | -i input} [-k keyfile] [-m dir|iso] [-b size] [-c] [output]
 ```
 
 ## Command-line options
@@ -15,10 +15,12 @@ bluraybackup-ex {-d device | -i input} [-k keyfile] [-b size] [-o outdir]
 | `-d PATH` | `--device=PATH` | Physical Blu-ray device path. Example (Linux): `/dev/sr0`; (Windows): `D:` |
 | `-i PATH` | `--input=PATH` | Local disc image file (ISO/BIN) or a directory containing a BDMV structure |
 | `-k FILE` | `--keydb=FILE` | Path to the AACS keys database file |
-| `-o DIR` | `--output=DIR` | Output directory |
-| `-b SIZE` | `--buffer=SIZE` | I/O read buffer size (e.g. `6144`, `60k`, `6m`,). Must be ≥ 6144. Default: `6144`. |
+| `-m MODE` | `--mode=MODE` | Output mode: `dir` (default) or `iso` |
+| `-b SIZE` | `--buffer=SIZE` | I/O read buffer size (e.g. `6144`, `64k`, `6m`). Must be ≥ 6144. Default: `6144`. |
+| `-c` | `--check` | Verify every file on the disc before (or instead of) extracting |
 | `-h` | `--help` | Show help information |
 | `-v` | `--version` | Show version and license information |
+| `output` | | Destination path (directory for `dir` mode, file for `iso` mode) |
 
 ## Detailed options
 
@@ -38,44 +40,61 @@ Specify the AACS keys database file. If not provided, the program will search th
 
 It will also try filename variants like `keydb.cfg`, `KeyDB.cfg`, and `KEYDB.CFG`.
 
-### Output directory (`-o`)
+### Output mode (`-m`)
 
-- Specify the output directory for backup files. The directory will be created if it does not exist.
-- If `-o` is not specified, only disc information is displayed; no files are copied and the program exits with 0.
+| Mode | Output | Notes |
+|------|--------|-------|
+| `dir` | `<output>/<disc-label>/` directory tree | Default when `-m` is omitted |
+| `iso` | Single decrypted ISO file at `<output>` | Phase 1: raw sector copy; Phase 2: .m2ts streams replaced with AACS-decrypted content. Requires `-i <file.iso>`. |
+
+If `output` is not provided at all, only disc information is printed and the program exits successfully.
+
+### Disc integrity check (`-c`)
+
+Reads every file on the disc without writing any output. On AACS-encrypted discs each 6144-byte unit MAC is validated and any failed blocks are reported with their file path and byte offset. Can be combined with an `output` path to verify before extracting.
 
 ### I/O buffer size (`-b`)
 
-Controls how many bytes are read from the source and written to the destination in a single operation.
+Controls how many bytes are read from the source in a single operation.
 
 - Default: `6144` bytes (one AACS encryption block, 3 × 2048-byte BD sectors). Safe for physical drives with scratched discs — smaller reads mean more precise error recovery.
 - For ISO images or fast SSDs, a larger value significantly improves throughput:
-  - `60k` — minor boost, still conservative
-  - `6m` — recommended for ISO/SSD backups, optimal for most case.
-- Value must be at least `6144`. Larger sizes do not need to be a multiple of `6144`, though aligned values can still be a sensible choice.
+  - `64k` — minor boost, still conservative
+  - `6m` — recommended for ISO/SSD backups.
+- Value must be at least `6144`.
 
 Supported suffixes: `k`/`K` (×1024), `m`/`M` (×1024²), `g`/`G` (×1024³), or plain bytes.
 
 ## Examples
 
 ```bash
-# Print disc information only (no -o given)
+# Print disc information only (no output path given)
 bluraybackup-ex -d /dev/sr0
 bluraybackup-ex -i /path/to/disc.iso
 
-# Backup an entire disc from a physical drive
-bluraybackup-ex -d /dev/sr0 -o ~/backup
+# Extract file tree from a physical drive
+bluraybackup-ex -d /dev/sr0 ~/backup
 
-# Extract an entire disc from an ISO image into a specific directory
-bluraybackup-ex -i /path/to/disc.iso -o /output/dir
+# Extract file tree from an ISO image
+bluraybackup-ex -i /path/to/disc.iso /output/dir
 
 # Extract from a BDMV directory and specify a keys file
-bluraybackup-ex -i /path/to/BDMV_DIR -k /path/to/KEYDB.cfg -o ~/output
+bluraybackup-ex -i /path/to/BDMV_DIR -k /path/to/KEYDB.cfg ~/output
 
-# Use a 1 MB buffer for faster ISO extraction
-bluraybackup-ex -i /path/to/disc.iso -b 1m -o /output/dir
+# Produce a single decrypted ISO image (6 MB buffer)
+bluraybackup-ex -i encrypted.iso -m iso -b 6m decrypted.iso
+
+# Use a 1 MB buffer for faster dir-mode extraction from ISO
+bluraybackup-ex -i /path/to/disc.iso -b 1m /output/dir
 
 # Use a conservative 64 KB buffer for a scratched physical disc
-bluraybackup-ex -d /dev/sr0 -b 64k -o ~/backup
+bluraybackup-ex -d /dev/sr0 -b 64k ~/backup
+
+# Verify disc before extracting
+bluraybackup-ex -i disc.iso -c ~/backup
+
+# Verify only (no output path)
+bluraybackup-ex -i disc.iso -c
 ```
 
 ## Exit codes
