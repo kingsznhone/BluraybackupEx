@@ -682,30 +682,32 @@ static int is_m2ts(const char *name) {
  * dst      – output ISO file opened for random-write ("r+b")
  * buf_size – I/O buffer size (will be rounded down to a multiple of 6144) */
 static int patch_iso_stream(BLURAY *bluray, udfread *udf, FILE *dst, const char *bd_path, size_t buf_size) {
-    UDFFILE          *udf_file = NULL;
-    struct bd_file_s *bd_file  = NULL;
-    uint8_t          *buf      = NULL;
-    uint32_t          start_lba;
+    UDFFILE          *udf_file  = NULL;
+    struct bd_file_s *bd_file   = NULL;
+    uint8_t          *buf       = NULL;
     int64_t           file_size;
-    int64_t           written = 0;
-    int64_t           rd      = 0;
-    int               success = 1;
+    int64_t           written   = 0;
+    int64_t           rd        = 0;
+    int               success   = 1;
     uint64_t          start_ms, last_update_ms;
     size_t            effective_buf;
+    uint32_t          file_block = 0; /* logical 2048-byte block index within the file */
 
-    /* Open via udfread to retrieve the starting LBA within the ISO. */
+    /* Keep udf_file open throughout: we need per-block LBA lookups during
+     * patching to correctly handle files whose UDF extents are not physically
+     * contiguous in the ISO (UDF limits a single extent to ~1 GB, so any file
+     * larger than ~1 GB uses multiple extents that may not be adjacent). */
     udf_file = udfread_file_open(udf, bd_path);
     if (udf_file == NULL) {
         fprintf(stderr, BIN ": udfread: can't open %s.\n", bd_path);
         return 0;
     }
-    start_lba = udfread_file_lba(udf_file, 0);
     file_size = udfread_file_size(udf_file);
-    udfread_file_close(udf_file);
 
-    if (start_lba == 0) {
+    if (udfread_file_lba(udf_file, 0) == 0) {
         /* LBA 0 is the system area; no BD data file lives there. */
         fprintf(stderr, BIN ": Can't determine sector address for %s.\n", bd_path);
+        udfread_file_close(udf_file);
         return 0;
     }
 
@@ -713,6 +715,7 @@ static int patch_iso_stream(BLURAY *bluray, udfread *udf, FILE *dst, const char 
     bd_file = bd_open_file_dec(bluray, bd_path);
     if (bd_file == NULL) {
         fprintf(stderr, BIN ": Can't open %s for decryption.\n", bd_path);
+        udfread_file_close(udf_file);
         return 0;
     }
 
@@ -723,13 +726,6 @@ static int patch_iso_stream(BLURAY *bluray, udfread *udf, FILE *dst, const char 
     buf = malloc(effective_buf);
     if (buf == NULL) {
         fputs(BIN ": Can't allocate patch buffer.\n", stderr);
-        success = 0;
-        goto done;
-    }
-
-    /* Seek the output file to the file's starting sector. */
-    if (fseeko(dst, (int64_t)start_lba * 2048, SEEK_SET) != 0) {
-        fprintf(stderr, BIN ": Seek error in output for %s.\n", bd_path);
         success = 0;
         goto done;
     }
@@ -747,11 +743,56 @@ static int patch_iso_stream(BLURAY *bluray, udfread *udf, FILE *dst, const char 
         }
         if (buf_pos == 0) break;
 
-        if (fwrite(buf, 1, buf_pos, dst) != buf_pos) {
-            fprintf(stderr, BIN ": Write error patching %s.\n", bd_path);
-            success = 0;
-            break;
+        /* Write the buffer sector-by-sector, seeking to the correct physical
+         * LBA for each 2048-byte block.  Consecutive blocks that share
+         * contiguous LBAs are written in a single fwrite for efficiency. */
+        size_t offset = 0;
+        while (offset < buf_pos) {
+            uint32_t lba = udfread_file_lba(udf_file, file_block);
+            if (lba == 0) {
+                fprintf(stderr, BIN ": Can't resolve LBA for block %u in %s.\n",
+                        file_block, bd_path);
+                success = 0;
+                goto done;
+            }
+
+            /* Count how many consecutive blocks share contiguous LBAs. */
+            size_t max = (buf_pos - offset) / 2048;
+            size_t run = 1;
+            while (run < max &&
+                   udfread_file_lba(udf_file, file_block + (uint32_t)run) ==
+                       lba + (uint32_t)run)
+                run++;
+
+            size_t write_bytes = run * 2048;
+
+            if (fseeko(dst, (int64_t)lba * 2048, SEEK_SET) != 0) {
+                fprintf(stderr, BIN ": Seek error in output for %s.\n", bd_path);
+                success = 0;
+                goto done;
+            }
+            if (fwrite(buf + offset, 1, write_bytes, dst) != write_bytes) {
+                fprintf(stderr, BIN ": Write error patching %s.\n", bd_path);
+                success = 0;
+                goto done;
+            }
+
+            offset     += write_bytes;
+            file_block += (uint32_t)run;
         }
+
+        /* Handle a trailing partial sector at end-of-file (buf_pos not a
+         * multiple of 2048 bytes). */
+        if (buf_pos % 2048 != 0) {
+            size_t   tail = buf_pos - offset;
+            uint32_t lba  = udfread_file_lba(udf_file, file_block);
+            if (lba != 0) {
+                if (fseeko(dst, (int64_t)lba * 2048, SEEK_SET) == 0)
+                    fwrite(buf + offset, 1, tail, dst);
+            }
+            file_block++;
+        }
+
         written += (int64_t)buf_pos;
 
         {
@@ -770,6 +811,7 @@ static int patch_iso_stream(BLURAY *bluray, udfread *udf, FILE *dst, const char 
 done:
     free(buf);
     bd_file->close(bd_file);
+    udfread_file_close(udf_file);
     return success;
 }
 
