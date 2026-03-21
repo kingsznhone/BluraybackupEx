@@ -10,42 +10,28 @@ set(BLURAYBACKUP_EX_NAME "bluraybackup-ex")
 
 project(${BLURAYBACKUP_EX_NAME} VERSION ${BLURAYBACKUP_VERSION} LANGUAGES C)
 
-set(_BLURAYBACKUP_LEGACY_INSTALL_PREFIX "C:/Program Files/bluraybackup")
+# ---- C standard (global) ----
+set(CMAKE_C_STANDARD 17)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS OFF)
 
-if(WIN32 AND (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT OR CMAKE_INSTALL_PREFIX STREQUAL "${_BLURAYBACKUP_LEGACY_INSTALL_PREFIX}"))
-    set(CMAKE_INSTALL_PREFIX "C:/Program Files/${PROJECT_NAME}" CACHE PATH "Install path prefix." FORCE)
-endif()
-
-# ---- libbluray: prefer pkg-config (Linux/macOS), fall back to manual find (vcpkg/Windows) ----
+# ---- libbluray ----
+# Linux: pkg-config  |  Windows (vcpkg): find_path / find_library
 find_package(PkgConfig QUIET)
 if(PkgConfig_FOUND)
-    pkg_check_modules(LIBBLURAY IMPORTED_TARGET libbluray)
-endif()
-
-if(LIBBLURAY_FOUND)
-    # pkg-config path: use the imported target directly
-    set(_LIBBLURAY_TARGET PkgConfig::LIBBLURAY)
+    pkg_check_modules(libbluray REQUIRED IMPORTED_TARGET libbluray)
+    set(_LIBBLURAY_TARGET PkgConfig::libbluray)
 else()
-    # Manual find: used by vcpkg on Windows
-    find_path(LIBBLURAY_INCLUDE_DIR
-        NAMES libbluray/bluray.h
-        REQUIRED
-    )
-    find_library(LIBBLURAY_LIBRARY
-        NAMES bluray
-        REQUIRED
-    )
-    find_library(LIBUDFREAD_LIBRARY
-        NAMES udfread
-    )
+    find_path(LIBBLURAY_INCLUDE_DIR NAMES libbluray/bluray.h REQUIRED)
+    find_library(LIBBLURAY_LIBRARY NAMES bluray REQUIRED)
+    find_library(LIBUDFREAD_LIBRARY NAMES udfread REQUIRED)
     add_library(_libbluray_manual INTERFACE)
     target_include_directories(_libbluray_manual INTERFACE ${LIBBLURAY_INCLUDE_DIR})
-    target_link_libraries(_libbluray_manual INTERFACE
-        ${LIBBLURAY_LIBRARY}
-        $<$<BOOL:${LIBUDFREAD_LIBRARY}>:${LIBUDFREAD_LIBRARY}>
-    )
+    target_link_libraries(_libbluray_manual INTERFACE ${LIBBLURAY_LIBRARY} ${LIBUDFREAD_LIBRARY})
     set(_LIBBLURAY_TARGET _libbluray_manual)
 endif()
+
+find_package(Threads REQUIRED)
 
 add_executable(${PROJECT_NAME}
     src/main.c
@@ -60,28 +46,16 @@ target_include_directories(${PROJECT_NAME} PRIVATE src)
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     BIN="${PROJECT_NAME}"
     VERSION="${PROJECT_VERSION}"
+    $<$<NOT:$<PLATFORM_ID:Windows>>:_POSIX_C_SOURCE=200809L>
+    $<$<C_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS>
 )
 
-if(NOT WIN32)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE _POSIX_C_SOURCE=200809L)
-endif()
+target_compile_options(${PROJECT_NAME} PRIVATE
+    $<$<C_COMPILER_ID:MSVC>:/W4 /wd4100 /wd4820 /utf-8>
+    $<$<NOT:$<C_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>
+)
 
-find_package(Threads REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${_LIBBLURAY_TARGET} Threads::Threads)
-
-# Require C17
-target_compile_features(${PROJECT_NAME} PRIVATE c_std_17)
-set_target_properties(${PROJECT_NAME} PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
-
-# Disable MSVC deprecation warnings for POSIX names on Windows
-if(MSVC)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE _CRT_SECURE_NO_WARNINGS)
-    target_compile_options(${PROJECT_NAME} PRIVATE /W4 /wd4100 /wd4820 /utf-8)
-endif()
-
-if(NOT MSVC)
-    target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic)
-endif()
 
 # Install rule (used on Linux/macOS)
 include(GNUInstallDirs)
