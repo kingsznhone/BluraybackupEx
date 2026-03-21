@@ -31,7 +31,7 @@ int bd_source_exists(const char *path) {
     return exist;
 }
 
-int copy_dir(BLURAY *bluray, const char *path, size_t buf_size) {
+int extract_dir(BLURAY *bluray, const char *path, size_t buf_size) {
     int              all_good, read;
     struct bd_dir_s *dir;
     BD_DIRENT       *dirent;
@@ -86,9 +86,9 @@ int copy_dir(BLURAY *bluray, const char *path, size_t buf_size) {
         strcat(new_path, dirent->d_name);
 
         if (strchr(dirent->d_name, '.') == NULL) {
-            if (!copy_dir(bluray, new_path, buf_size)) all_good = 0;
+            if (!extract_dir(bluray, new_path, buf_size)) all_good = 0;
         } else {
-            if (!copy_file(bluray, new_path, new_path, buf_size)) all_good = 0;
+            if (!extract_file(bluray, new_path, new_path, buf_size)) all_good = 0;
         }
 
         free(new_path);
@@ -102,7 +102,7 @@ int copy_dir(BLURAY *bluray, const char *path, size_t buf_size) {
     return all_good;
 }
 
-int copy_file(BLURAY *bluray, const char *src, const char *dst, size_t buf_size) {
+int extract_file(BLURAY *bluray, const char *src, const char *dst, size_t buf_size) {
     uint8_t          *bufs[2];
     FILE             *dst_file;
     int64_t           read = 0;
@@ -257,7 +257,7 @@ static int verify_file(BLURAY *bluray, const char *path, size_t buf_size) {
     while (running) {
         size_t buf_pos = 0;
         /* Accumulate as many AACS units as fit in buf_size before processing.
-         * This mirrors copy_file's inner loop and keeps per-read overhead low.
+         * This mirrors extract_file's inner loop and keeps per-read overhead low.
          */
         while (running && buf_pos + ENCRYPTED_BYTES_TO_READ <= buf_size) {
             read = src_file->read(src_file, buf + buf_pos, ENCRYPTED_BYTES_TO_READ);

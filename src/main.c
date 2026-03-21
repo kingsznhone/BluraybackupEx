@@ -16,7 +16,7 @@ static void stop(int sig) {
 int main(int argc, char *argv[]) {
     BLURAY       *bluray = NULL;
     char         *output = NULL;
-    output_mode_t mode;
+    subcommand_t  cmd;
     char         *source_path = NULL;
 
 #ifdef _WIN32
@@ -26,59 +26,46 @@ int main(int argc, char *argv[]) {
     SetConsoleCP(CP_UTF8);
 #endif
     int    success;
-    int    check;
     size_t buf_size;
     char  *disc_dir = NULL;
 
     if (argc == 1) {
         fputs(BIN " " VERSION " - Blu-ray Disc backup tool\n"
-                  "Usage: " BIN " {-d device | -i input} [-k keyfile] [-m dir|iso] [output]\n"
+                  "Usage: " BIN " {extract | patch | check} [options]\n"
                   "Try '" BIN " --help' for more information.\n",
               stdout);
         return 0;
     }
 
-    check = 0;
-    init(argc, argv, &bluray, &output, &mode, &buf_size, &check, &source_path);
+    init(argc, argv, &cmd, &bluray, &output, &buf_size, &source_path);
     success = 0;
-
-    /* No output path and no -c: disc info was already printed; nothing more
-     * to do. */
-    if (output == NULL && !check) {
-        success = 1;
-        goto done;
-    }
 
     signal(SIGINT, stop);
     signal(SIGTERM, stop);
 
-    if (check) {
+    if (cmd == CMD_CHECK) {
         int errors;
         fputs("\n"
               "┌─────────────────────────────────────────────────────────────────────────────┐\n"
               "│                            Disc Integrity Check                             │\n"
               "└─────────────────────────────────────────────────────────────────────────────┘\n",
               stderr);
-        errors = verify_dir(bluray, "", buf_size);
+        errors  = verify_dir(bluray, "", buf_size);
+        success = (errors == 0);
         if (errors == 0)
             fputs("\n" BIN ": Disc check passed. No read errors found.\n", stderr);
         else
             fprintf(stderr, "\n" BIN ": Disc check complete: %d read error(s) found.\n", errors);
-        if (output == NULL) {
-            success = (errors == 0);
-            goto done;
-        }
-        if (!running) goto done;
+        goto done;
     }
 
-    /* --mode iso: produce a single decrypted ISO file. */
-    if (mode == MODE_ISO) {
+    if (cmd == CMD_PATCH) {
         success = dump_iso(bluray, source_path, output, buf_size);
         if (success) fprintf(stderr, "\n" BIN ": Decrypted ISO written to %s\n", output);
         goto done;
     }
 
-    /* Build the actual extraction directory: <output>/<disc_label> */
+    /* CMD_EXTRACT: build <output>/<disc_label>/ */
     {
         char  *label = get_disc_label(bluray);
         size_t len;
@@ -120,7 +107,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, BIN ": Can't change to disc directory %s.\n", disc_dir);
         goto done;
     }
-    success = copy_dir(bluray, "", buf_size);
+    success = extract_dir(bluray, "", buf_size);
 
 done:
     free(source_path);

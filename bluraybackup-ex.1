@@ -1,42 +1,44 @@
-.TH bluraybackup-ex 1 "March 2026" "bluraybackup-ex 2.1.0"
+.TH bluraybackup-ex 1 "March 2026" "bluraybackup-ex 2.2.0"
 .SH NAME
 bluraybackup-ex \- backup Blu-ray Disc Movies using libbluray
 .SH SYNOPSIS
 .B bluraybackup-ex
-{-d \fIdevice\fR | -i \fIinput\fR} [-k \fIkeyfile\fR] [-m dir|iso] [-b \fIsize\fR] [-c] [\fIoutput\fR]
+.B extract
+[-k \fIkeyfile\fR] [-b \fIsize\fR] \fIsource\fR \fIoutput-dir\fR
 
 .B bluraybackup-ex
-[\fIOPTION\fR]
+.B patch
+[-k \fIkeyfile\fR] [-b \fIsize\fR] \fIsource.iso\fR \fIoutput.iso\fR
+
+.B bluraybackup-ex
+.B check
+[-k \fIkeyfile\fR] [-b \fIsize\fR] \fIsource\fR
+
+.B bluraybackup-ex
+{-h | --help | -v | --version}
 .SH DESCRIPTION
 \fBbluraybackup-ex\fP makes a decrypted copy of a Blu-ray Disc Movie
 from a physical drive, an ISO/BIN disc image, or a directory
 containing a BDMV structure.
 
-Two output modes are available via \fB-m\fR:
-.IP \fBdir\fP 8
-Extract the full disc file tree into \fIoutput\fB/<disc-label>\fR/.
-This is the default when \fB-m\fR is not supplied.
-.IP \fBiso\fP 8
-Produce a single decrypted ISO image at \fIoutput\fR.
+Three subcommands are provided:
+.IP \fBextract\fP 8
+Extract the full disc file tree into \fIoutput-dir\fB/<disc-label>\fR/.
+.IP \fBpatch\fP 8
+Produce a single decrypted ISO image.
 Phase\~1 copies every sector of the source image verbatim;
 Phase\~2 overwrites all encrypted .m2ts streams with AACS-decrypted
 content obtained via libbluray.
-Requires \fB-i\fR with a regular file (ISO/BIN image).
+The source must be a regular ISO/BIN file.
+.IP \fBcheck\fP 8
+Read every file on the disc to verify readability.
+On AACS-encrypted discs each 6144-byte unit MAC is validated and
+failed blocks are reported with their file path and byte offset.
 .PP
-If \fIoutput\fR is omitted, only disc information is printed and the
-program exits with status\~0.
-
 To read protected Blu-ray media you need \fBlibaacs\fR installed and a
 valid \fBKEYDB.cfg\fR file. Some discs also require \fBlibbdplus\fR.
 .SH OPTIONS
-.TP
-\fB-d\fR, \fB--device\fR=\fIPATH\fR
-Use a physical Blu-ray device path, such as \fB/dev/sr0\fR on Linux or
-\fBD:\fR on Windows.
-.TP
-\fB-i\fR, \fB--input\fR=\fIPATH\fR
-Use a local ISO/BIN image file or a directory containing a BDMV
-structure.
+The following options are accepted by all subcommands.
 .TP
 \fB-k\fR, \fB--keydb\fR=\fIFILE\fR
 Use the specified AACS keys database file.
@@ -45,16 +47,6 @@ common filename variants (see
 .B KEYDB SEARCH PATH
 below).
 .TP
-\fB-m\fR, \fB--mode\fR=\fIMODE\fR
-Output mode. Accepted values:
-.RS
-.IP \fBdir\fP 8
-Extract the full disc file tree into \fIoutput\fB/<disc-label>\fR/
-(default).
-.IP \fBiso\fP 8
-Write a single decrypted ISO image to \fIoutput\fR.
-.RE
-.TP
 \fB-b\fR, \fB--buffer\fR=\fISIZE\fR
 Set the I/O buffer size. Accepted suffixes: \fBk\fR/\fBK\fR (×1024),
 \fBm\fR/\fBM\fR (×1024²), \fBg\fR/\fBG\fR (×1024³), or plain bytes.
@@ -62,34 +54,38 @@ Must be at least 6144 (one AACS unit, 3 BD sectors).
 Default: \fB6144\fR. Larger values (e.g. \fB6m\fR) significantly
 improve throughput on ISO images and SSDs.
 .TP
-\fB-c\fR, \fB--check\fR
-Read every file on the disc to verify readability. On AACS-encrypted
-discs each 6144-byte unit MAC is validated; errors are reported with
-the file path and byte offset. Can be combined with \fIoutput\fR to
-verify before extracting.
-.TP
 \fB-h\fR, \fB--help\fR
 Print usage information.
+With no subcommand, print global help.
+With a subcommand, print subcommand-specific help.
 .TP
 \fB-v\fR, \fB--version\fR
-Print version and license information.
+Print version and license information (global flag only).
 .SH ARGUMENTS
 .TP
-\fIoutput\fR
-Destination path. For \fBdir\fR mode, a directory that will be created
-if necessary; the disc label is appended as a sub-directory. For
-\fBiso\fR mode, the path of the output file. If omitted, the program
-only prints disc information.
+\fIsource\fR
+Disc source for \fBextract\fR and \fBcheck\fR.
+May be a physical Blu-ray device path (e.g. \fB/dev/sr0\fR),
+an ISO/BIN image file, or a directory containing a BDMV structure.
+.TP
+\fIsource.iso\fR
+Input ISO/BIN image file for \fBpatch\fR. Must be a regular file.
+.TP
+\fIoutput-dir\fR
+Base output directory for \fBextract\fR.
+The disc label is appended automatically: \fIoutput-dir\fB/<disc-label>\fR/.
+.TP
+\fIoutput.iso\fR
+Output decrypted ISO file path for \fBpatch\fR.
 .SH BEHAVIOR
 .TP
-Input selection
-\fB-d\fR and \fB-i\fR are mutually exclusive. If neither is provided,
-the default device is used: \fB/dev/sr0\fR on Unix-like systems or
-\fBD:\fR on Windows.
+Subcommand dispatch
+The first non-option argument must be one of \fBextract\fR,
+\fBpatch\fR, or \fBcheck\fR.
 .TP
-ISO mode requirement
-\fB-m iso\fR requires the source (\fB-i\fR) to be a regular file.
-Devices and BDMV directories are not supported in ISO mode.
+patch source requirement
+\fBpatch\fR requires its \fIsource.iso\fR argument to be a regular
+file. Device paths and BDMV directories are not supported.
 .SH KEYDB SEARCH PATH
 When \fB-k\fR is not provided, \fBbluraybackup-ex\fR searches:
 .IP "Linux / macOS" 16
@@ -108,20 +104,23 @@ Operation completed successfully.
 An error occurred.
 .SH EXAMPLES
 .TP
-Print disc information only
-.B bluraybackup-ex -i /path/to/disc.iso
-.TP
 Extract file tree from a physical drive
-.B bluraybackup-ex -d /dev/sr0 ~/backup
+.B bluraybackup-ex extract /dev/sr0 ~/backup
 .TP
 Extract file tree from an ISO image
-.B bluraybackup-ex -i disc.iso ~/backup
+.B bluraybackup-ex extract disc.iso ~/backup
+.TP
+Extract with a 1 MB buffer for faster throughput
+.B bluraybackup-ex extract -b 1m disc.iso /output/dir
 .TP
 Produce a decrypted ISO (6 MB buffer)
-.B bluraybackup-ex -i encrypted.iso -m iso -b 6m decrypted.iso
+.B bluraybackup-ex patch -b 6m encrypted.iso decrypted.iso
 .TP
-Verify disc readability before extracting
-.B bluraybackup-ex -i disc.iso -c ~/backup
+Verify disc readability
+.B bluraybackup-ex check /dev/sr0
+.TP
+Verify an ISO image
+.B bluraybackup-ex check disc.iso
 .SH SEE ALSO
 .P
 \fBdvdbackup\fP(1)

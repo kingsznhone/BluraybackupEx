@@ -17,7 +17,7 @@
     #include <windows.h>
 
     #ifndef S_ISBLK
-        #define S_ISBLK(m) 0
+        #define S_ISBLK(m) ((void)(m), 0)
     #endif
 
     #ifndef S_ISREG
@@ -30,30 +30,26 @@
 
     #define bd_stat_s struct __stat64
 
+/* Internal helper: convert s from one specific codepage to a new wchar_t
+ * buffer. Returns a malloc'd pointer on success, NULL on failure. */
+static inline wchar_t *try_cp_to_wide(UINT cp, DWORD flags, const char *s) {
+    int n = MultiByteToWideChar(cp, flags, s, -1, NULL, 0);
+    if (n <= 0) return NULL;
+    wchar_t *w = (wchar_t *)malloc((size_t)n * sizeof(wchar_t));
+    if (!w) return NULL;
+    if (MultiByteToWideChar(cp, flags, s, -1, w, n) > 0) return w;
+    free(w);
+    return NULL;
+}
+
 /* Convert a path string (tries UTF-8 first, falls back to the system ANSI
  * code page) to a newly-allocated wide-char string.
  * libbluray/libudfread may return UTF-8 or the system ACP depending on the
  * platform build; this helper handles both transparently.
  * Caller must free() the result. Returns NULL on failure. */
 static inline wchar_t *path_to_wide(const char *s) {
-    /* Try strict UTF-8 first. */
-    int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s, -1, NULL, 0);
-    if (n > 0) {
-        wchar_t *w = (wchar_t *)malloc((size_t)n * sizeof(wchar_t));
-        if (w && MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s, -1, w, n) > 0) return w;
-        free(w);
-    }
-    /* Fall back to the system ANSI code page (e.g. CP936 on Chinese Windows).
-     */
-    n = MultiByteToWideChar(CP_ACP, 0, s, -1, NULL, 0);
-    if (n <= 0) return NULL;
-    wchar_t *w = (wchar_t *)malloc((size_t)n * sizeof(wchar_t));
-    if (!w) return NULL;
-    if (MultiByteToWideChar(CP_ACP, 0, s, -1, w, n) == 0) {
-        free(w);
-        return NULL;
-    }
-    return w;
+    wchar_t *w = try_cp_to_wide(CP_UTF8, MB_ERR_INVALID_CHARS, s);
+    return w ? w : try_cp_to_wide(CP_ACP, 0, s);
 }
 
 static inline int _w_mkdir(const char *p) {
@@ -83,8 +79,8 @@ static inline int _w_stat(const char *p, struct __stat64 *s) {
 static inline FILE *_w_fopen(const char *path, const char *mode) {
     wchar_t *w = path_to_wide(path);
     if (!w) return NULL;
-    wchar_t wmode[8] = {0};
-    for (int i = 0; i < 7 && mode[i]; i++) wmode[i] = (wchar_t)(unsigned char)mode[i];
+    wchar_t wmode[8];
+    MultiByteToWideChar(CP_ACP, 0, mode, -1, wmode, 8);
     FILE *f = _wfopen(w, wmode);
     free(w);
     return f;

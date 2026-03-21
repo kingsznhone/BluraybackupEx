@@ -16,8 +16,8 @@ char *get_disc_label(BLURAY *bluray);
 
 int file_exists(const char *path, bd_stat_s *info);
 int bd_source_exists(const char *path);
-int copy_dir(BLURAY *bluray, const char *path, size_t buf_size);
-int copy_file(BLURAY *bluray, const char *src, const char *dst, size_t buf_size);
+int extract_dir(BLURAY *bluray, const char *path, size_t buf_size);
+int extract_file(BLURAY *bluray, const char *src, const char *dst, size_t buf_size);
 
 /* Verify all files on the disc by reading every AACS unit and checking the
  * MAC.  Returns the total number of unreadable blocks across all files. */
