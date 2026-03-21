@@ -49,7 +49,7 @@ void print_progress(const char *label, int64_t written, int64_t total, uint64_t 
     double   elapsed  = (double)(now_ms - start_ms) / 1000.0;
     double   speed    = elapsed > 0.01 ? (double)written / elapsed : 0.0;
     double   speed_mb = speed / (1024.0 * 1024.0);
-    char     sz_w[16], sz_t[16], dur[12];
+    char     sz_w[16], sz_t[16], dur[20];
 
     format_size(sz_w, sizeof(sz_w), written);
     if (total > 0) {
