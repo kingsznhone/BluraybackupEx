@@ -21,7 +21,7 @@ Run `bluraybackup-ex <subcommand> --help` for subcommand-specific details.
 | Option | Long form | Description |
 |------:|--------|------|
 | `-k FILE` | `--keydb=FILE` | Path to the AACS keys database file |
-| `-b SIZE` | `--buffer=SIZE` | I/O read buffer size (e.g. `6144`, `64k`, `6m`). Must be ≥ 6144. Default: `6144`. |
+| `-b SIZE` | `--buffer=SIZE` | I/O read buffer size (e.g. `6144`, `60k`, `6m`). Must be ≥ 6144. Default: `6144`. |
 | `-h` | `--help` | Show help (also works as `bluraybackup-ex --help` for global help) |
 | `-v` | `--version` | Show version and license information (global flag only) |
 
@@ -64,7 +64,7 @@ Controls how many bytes are read from the source in a single operation.
 
 - Default: `6144` bytes (one AACS encryption block, 3 × 2048-byte BD sectors). Safe for physical drives with scratched discs — smaller reads mean more precise error recovery.
 - For ISO images or fast SSDs, a larger value significantly improves throughput:
-  - `64k` — minor boost, still conservative
+  - `60k` — minor boost, still conservative
   - `6m` — recommended for ISO/SSD backups.
 - Value must be at least `6144`.
 
