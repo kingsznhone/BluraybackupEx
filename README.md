@@ -171,6 +171,29 @@ sudo dpkg -r bluraybackup-ex
 sudo dpkg -P bluraybackup-ex
 ```
 
+### macOS
+
+Required libraries and tools are available in [Homebrew](https://brew.sh).
+
+```bash
+brew install cmake libaacs libbluray ninja
+
+# If on Apple Silicon, make links to libaacs in /usr/local,
+# so libbluray can find them
+cd /usr/local/lib
+sudo ln -s /opt/homebrew/lib/libaacs.*dylib .
+
+# Clone and build
+git clone https://github.com/kingsznhone/bluraybackupEx
+cd bluraybackupEx
+cmake --preset macos-release
+cmake --build --preset macos-release
+# Output: build/bluraybackup-ex
+
+# Optional: install system-wide
+sudo cmake --install build
+````
+
 ## Versioning
 
 The top-level `VERSION` file is the single source of truth for the upstream version.
