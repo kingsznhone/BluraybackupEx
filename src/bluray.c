@@ -22,10 +22,10 @@ int bd_source_exists(const char *path) {
     exist = 0;
 
     if (file_exists(path, &info)) {
-        if (S_ISBLK(info.st_mode) || S_ISREG(info.st_mode) || S_ISDIR(info.st_mode))
+        if (S_ISBLK(info.st_mode) || S_ISCHR(info.st_mode) || S_ISREG(info.st_mode) || S_ISDIR(info.st_mode))
             exist = 1;
         else
-            fprintf(stderr, BIN ": %s isn't a block device, image file, or directory.\n", path);
+            fprintf(stderr, BIN ": %s isn't a block/character device, image file, or directory.\n", path);
     }
 
     return exist;
