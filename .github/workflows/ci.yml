@@ -14,7 +14,7 @@ jobs:
     name: Windows (MSVC + vcpkg)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Get vcpkg baseline commit
         id: vcpkg_baseline
         run: |
@@ -42,7 +42,7 @@ jobs:
         run: Get-ChildItem -Path dist/windows -File | Format-Table -AutoSize
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bluraybackup-ex-windows-x64-zip
           path: dist/windows/bluraybackup-ex.win_x64.zip
@@ -52,7 +52,7 @@ jobs:
     name: Linux (Debian package)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential cmake debhelper dpkg-dev libbluray-dev
@@ -64,10 +64,66 @@ jobs:
         run: ls -la dist/debian
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bluraybackup-ex-debian-deb
           path: dist/debian/
+          if-no-files-found: error
+
+  build-linux-binary:
+    name: Linux generic binary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build libbluray-dev
+
+      - name: Configure
+        run: cmake --preset linux-release
+
+      - name: Build
+        run: cmake --build --preset linux-release
+
+      - name: Collect Linux artifact
+        run: sh tools/collect-linux-artifacts.sh
+
+      - name: Verify Linux artifact
+        run: ls -la dist/linux
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: bluraybackup-ex-linux-x64-tar
+          path: dist/linux/bluraybackup-ex.linux_x64.tar.gz
+          if-no-files-found: error
+
+  build-macos:
+    name: macOS (Homebrew + CMake)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: brew install cmake libbluray ninja
+
+      - name: Configure
+        run: cmake --preset macos-release
+
+      - name: Build
+        run: cmake --build --preset macos-release
+
+      - name: Collect macOS artifact
+        run: sh tools/collect-macos-artifacts.sh
+
+      - name: Verify macOS artifact
+        run: ls -la dist/macos
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: bluraybackup-ex-macos-x64-tar
+          path: dist/macos/bluraybackup-ex.macos_x64.tar.gz
           if-no-files-found: error
 
   publish-release:
@@ -76,19 +132,33 @@ jobs:
     needs:
       - build-windows
       - build-linux
+      - build-linux-binary
+      - build-macos
     runs-on: ubuntu-latest
     steps:
       - name: Download Windows artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: bluraybackup-ex-windows-x64-zip
           path: release-assets/windows
 
       - name: Download Debian artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: bluraybackup-ex-debian-deb
           path: release-assets/debian
+
+      - name: Download Linux binary artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: bluraybackup-ex-linux-x64-tar
+          path: release-assets/linux
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: bluraybackup-ex-macos-x64-tar
+          path: release-assets/macos
 
       - name: Verify release assets
         run: |
@@ -100,5 +170,7 @@ jobs:
           files: |
             release-assets/windows/*.zip
             release-assets/debian/*.deb
+            release-assets/linux/*.tar.gz
+            release-assets/macos/*.tar.gz
           overwrite_files: true
           token: ${{ secrets.GITHUB_TOKEN }}

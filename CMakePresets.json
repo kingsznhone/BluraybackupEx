@@ -79,7 +79,7 @@
         },
         {
             "name": "macos-debug",
-            "displayName": "Linux Debug (GCC/Clang)",
+            "displayName": "MacOS Debug (GCC/Clang)",
             "inherits": "macos-base",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug"
@@ -87,7 +87,7 @@
         },
         {
             "name": "macos-release",
-            "displayName": "Linux Release (GCC/Clang)",
+            "displayName": "MacOS Release (GCC/Clang)",
             "inherits": "macos-base",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"

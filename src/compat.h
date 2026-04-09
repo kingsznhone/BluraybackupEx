@@ -20,6 +20,10 @@
         #define S_ISBLK(m) ((void)(m), 0)
     #endif
 
+    #ifndef S_ISCHR
+        #define S_ISCHR(m) ((void)(m), 0)
+    #endif
+
     #ifndef S_ISREG
         #define S_ISREG(m) (((m) & _S_IFMT) == _S_IFREG)
     #endif

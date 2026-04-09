@@ -1,3 +1,11 @@
+bluraybackup-ex (2.3.0-1) unstable; urgency=medium
+
+  * Bump upstream version to 2.3.0.
+  * explicit macOS build support
+  * allow using a character device
+
+ -- ZNH <35349300+kingsznhone@users.noreply.github.com>  Thu, 09 Apr 2026 22:29:42 +08:00
+ 
 bluraybackup-ex (2.2.0-1) unstable; urgency=medium
 
   * Bump upstream version to 2.2.0.
@@ -34,4 +42,5 @@ bluraybackup (1.0-1) unstable; urgency=low
   * Initial release, closes: #1055089.
 
  -- Matteo Bini <matteobin@tiepi.it>  Mon, 30 Oct 2023 18:46:04 +0100
+
 
