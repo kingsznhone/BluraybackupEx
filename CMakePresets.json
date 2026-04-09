@@ -70,6 +70,28 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"
             }
+        },
+        {
+            "name": "macos-base",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build"
+        },
+        {
+            "name": "macos-debug",
+            "displayName": "Linux Debug (GCC/Clang)",
+            "inherits": "macos-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "macos-release",
+            "displayName": "Linux Release (GCC/Clang)",
+            "inherits": "macos-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
         }
     ],
     "buildPresets": [
@@ -100,6 +122,16 @@
             "name": "linux-release",
             "displayName": "Build Release",
             "configurePreset": "linux-release"
+        },
+        {
+            "name": "macos-debug",
+            "displayName": "Build Debug",
+            "configurePreset": "macos-debug"
+        },
+        {
+            "name": "macos-release",
+            "displayName": "Build Release",
+            "configurePreset": "macos-release"
         }
     ]
 }
