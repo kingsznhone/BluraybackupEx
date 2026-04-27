@@ -256,3 +256,6 @@ GPLv3+
 - **Matteo Bini** — Original author.
 - **kingsznhone** — Major improvements and contributions: Windows port modernization, C17 upgrade, `-b` buffer option, CMake build system, and documentation.
 
+## Stargazers over time
+
+[![Stargazers over time](https://starchart.cc/kingsznhone/BluraybackupEx.svg)](https://starchart.cc/kingsznhone/BluraybackupEx)
